@@ -32,12 +32,17 @@ test.beforeAll(async () => {
           import BulkEditBar from ${JSON.stringify(path.join(root, "components/transactions/BulkEditBar.tsx"))};
           import TransactionEditor from ${JSON.stringify(path.join(root, "components/transactions/TransactionEditor.tsx"))};
           import TransactionQueryControls from ${JSON.stringify(path.join(root, "components/transactions/TransactionQueryControls.tsx"))};
+          import TransactionSortMenu from ${JSON.stringify(path.join(root, "components/transactions/TransactionSortMenu.tsx"))};
+          import TableToolbar from ${JSON.stringify(path.join(root, "components/transactions/TableToolbar.tsx"))};
           import AddManualHoldingForm from ${JSON.stringify(path.join(root, "components/investments/AddManualHoldingForm.tsx"))};
           import { parseLedgerQuery, ledgerQueryEntries } from ${JSON.stringify(path.join(root, "lib/ledger-query.ts"))};
           function FiltersFixture() {
             const search = useSyncExternalStore(callback => { window.addEventListener("popstate", callback); return () => window.removeEventListener("popstate", callback); }, () => location.search);
             const state = parseLedgerQuery(Object.fromEntries(new URLSearchParams(search)));
-            return h("main", { style: { padding: 16 } }, h("h1", {}, "Transaction filters"), h(TransactionQueryControls, { key: search, committed: state, entries: ledgerQueryEntries(state), options: { accounts: [], categories: [], subcategoriesByCategory: {}, merchants: [] } }));
+            return h("main", { style: { padding: 16 } }, h("h1", {}, "Transaction filters"),
+              h(TransactionQueryControls, { key: search, committed: state, entries: ledgerQueryEntries(state), options: { accounts: [], categories: [], subcategoriesByCategory: {}, merchants: [] } }),
+              h(TableToolbar, { bulkTagBar: null, sortMenu: h(TransactionSortMenu, { field: state.sort, direction: state.direction, entries: ledgerQueryEntries(state) }) })
+            );
           }
           function Fixture() {
             const [selected, setSelected] = useState(false);
@@ -121,6 +126,35 @@ for (const width of [375, 1440]) {
     const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     expect(accessibility.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
+for (const width of [375, 1440]) {
+  test(`query popovers cover the inactive sort trigger at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route("http://fundflow.test/**", route => route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en"><head><title>Popover stacking</title><style>${css}</style></head><body><div id="root"></div><script>window.filtersFixture=true</script></body></html>` }));
+    await page.goto("http://fundflow.test/transactions");
+    await page.addScriptTag({ content: script });
+    const sort = page.getByRole("button", { name: "Sort: Date, newest first", exact: true });
+    for (const panel of ["Filters", "Date"]) {
+      await page.getByRole("button", { name: panel, exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      // Hit testing catches painting and pointer interception, not just page overflow.
+      expect(await sort.evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return hit !== null && hit !== el && !el.contains(hit);
+      })).toBe(true);
+      if (panel === "Filters") await page.screenshot({ path: info.outputPath("filters-above-sort.png"), fullPage: true });
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    }
+    await sort.click();
+    await expect(page.getByRole("dialog", { name: "Sort transactions" })).toBeVisible();
+    await expect(page.getByLabel("Sort by", { exact: true })).toBeFocused();
+    await sort.click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(sort).toBeFocused();
   });
 }
 

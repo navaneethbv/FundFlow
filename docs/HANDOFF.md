@@ -1,5 +1,28 @@
 # FundFlow Session Handoff
 
+## 2026-10-03: Production acceptance after PRs 220 and 221
+
+PRs #221 and #220 were merged after their 14 hosted checks passed, using the owner's explicit approval to bypass the remaining branch-policy gate.
+Production alias `fund-flow-swart.vercel.app` resolves to READY deployment `dpl_G9EkbmNL3ahaiDFBLrU2tQgesdoz` at main `27d951a0371687436013b68871ccdf7bc414941b`.
+Its tracked tree matches the tested #220 head.
+The report-shortcuts change was reverted by #221 and is not part of this production release.
+
+Signed-in Chrome checks on October 3 at approximately 20:25-20:40 PDT covered all primary navigation pages, dashboard Monitor, monthly review, reports Trends, receipts, recurring calendar/history, transaction filters, and opening/canceling editors.
+The exact-amount boundary returned matching pending and posted rows, invalid amount ranges were rejected, native keyboard month entry changed the query, and canceled cleared-state edits reset on reopening.
+Date/filter popovers fit 375px; data settings had no horizontal overflow at 375px or 768px.
+See [the detailed review](reviews/2026-10-03-functionality-and-sure-review.md#post-merge-production-verification) for evidence and limitations.
+No financial data, consent, connection, credential, or setting was changed.
+
+Visual inspection found the closed Sort trigger painted above open query popovers.
+The focused `fix/transaction-popover-stacking` follow-up raises that trigger only while its own menu is open.
+An integrated toolbar/query fixture reproduces the old behavior through browser hit testing at 375px and 1440px, then passes with the fix.
+Local verification passed 56 synthetic browser tests, 6,233 coverage tests (99.31% lines, 94.96% branches), lint, typecheck, palette validation, placeholder-config production build, and dependency audit.
+The strengthened hit-testing regression passed again after the full browser run.
+Twenty-two integration files remain skipped without disposable service configuration.
+Graph refresh completed with the existing optional SQL-parser limitation.
+This follow-up is separate from deployed main and has not been merged or deployed.
+The original checkout's unrelated changes and prior review worktrees remain untouched.
+
 ## 2026-10-03: Functionality review and initial Sure filter parity
 
 Work is isolated in `/private/tmp/fundflow-main-review-20261003` on `fix/post-merge-functionality-review`, based on fetched/pulled main `dcedce4`.

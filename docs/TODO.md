@@ -2,9 +2,10 @@
 
 ## Current review: Functionality and Sure parity, 2026-10-03
 
-The new `fix/post-merge-functionality-review` branch fixes reproduced ledger/form regressions and starts parity with amount-range and pending/posted ledger filters.
+PR #220 is merged and deployed at main `27d951a`, including the ledger/form fixes and amount-range and pending/posted ledger filters.
 See [the evidence and gap matrix](reviews/2026-10-03-functionality-and-sure-review.md).
-Production data was not changed; the branch is not merged or deployed.
+Read-only production acceptance found a remaining Sort-trigger layering defect; the `fix/transaction-popover-stacking` follow-up fixes it with integrated browser coverage and is not yet deployed.
+Production data was not changed.
 
 - Make split replacement, annotation updates, and linked goal-progress writes atomic, with owner validation and disposable database failure/concurrency tests.
 - Add tag/untagged ledger filters with pagination-safe query semantics.

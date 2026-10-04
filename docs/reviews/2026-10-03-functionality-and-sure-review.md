@@ -119,3 +119,41 @@ The future-clock run passed 6,228 unit tests with the clock set to January 15, 2
 Final lint, typecheck, production build, and dependency audit passed; the audit reported zero vulnerabilities.
 Hosted results are tracked on the new PR and reported separately from these local checks.
 This branch is not a production deployment or authorization to merge.
+
+## Post-merge production verification
+
+On October 3, 2026, signed-in Google Chrome verification resumed after the owner dismissed the extension panel that had blocked automation.
+The production alias was verified against READY deployment `dpl_G9EkbmNL3ahaiDFBLrU2tQgesdoz`, serving main `27d951a0371687436013b68871ccdf7bc414941b` after PRs #221 and #220 merged.
+The deployed tree equals tested review head `16af6b78e9011d508ab8943e89173068bfff14c8`.
+This is deployment evidence, separate from the browser observations below.
+
+- All primary navigation pages loaded: Dashboard, Accounts, Transactions, Cash Flow, Reports, Budget, Recurring, Goals, Investments, Debt Payoff, Forecasting, Advice, Notifications, Settings, and Year in Money.
+  Dashboard Monitor, monthly review, report Trends, and the receipt inbox also rendered.
+- Transaction amount bounds rejected a reversed range.
+  Equal bounds returned one matching pending row and four matching posted rows; every visible result had the requested amount and status.
+  Clearing filters removed their query state.
+  Native keyboard month selection produced the month query and chip.
+  Programmatic month filling did not commit the React draft in this Chrome automation session, so it was not treated as an application defect.
+- Opening an annotation editor, toggling its cleared checkbox locally, canceling, and reopening restored the saved checked state.
+  No Save or classification action was submitted.
+- Recurring View history used the `q` search parameter and returned only matching merchant rows.
+  The recurring calendar rendered its grid and occurrences.
+  Disabled-calendar fallback was not exercised in production because the calendar is enabled there.
+- Filter and Date panels stayed within the 375px viewport.
+  Settings Data measured document widths equal to viewport widths at 375px and 768px.
+  The receipt scan input was disabled with the expected instruction to enable AI insights; consent was not changed.
+- The dashboard and investments showed an existing Fidelity connection/sync warning and unavailable individual holdings.
+  The app labels the balance fallback explicitly; provider freshness and reconnect behavior remain unverified.
+- Browser logs contained extension-style message-channel errors and Grammarly warnings.
+  No application exception was identified from these entries.
+  Deployment-scoped runtime queries covering the verification window returned 118 HTTP 200 log entries and no 5xx or error/fatal entries; log coverage is not a proof that every route is healthy.
+
+The visual check also found a real regression: the inactive Sort button remained at the popover z-index and painted above the open Filters panel.
+Earlier isolated filter fixtures did not mount the neighboring toolbar, so all 54 synthetic tests passed without detecting it.
+The follow-up mounts the real toolbar and sort component beside query controls and uses hit testing to assert that inactive sorting cannot intercept a popover or its backdrop.
+Both 375px and 1440px regressions failed before the fix and passed when the Sort trigger was raised only while its own menu is open.
+The follow-up is not deployed until its separate PR is approved and merged.
+
+Production acceptance was read-only, apart from temporary unsaved form drafts and URL filters.
+Saved annotations, imports, uploads, provider reconnects, security/token changes, backups, and database rollback/concurrency remain outside this live run.
+Synthetic component fixtures with controlled responses do not establish real database persistence or service delivery.
