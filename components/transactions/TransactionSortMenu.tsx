@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import { ChevronDown } from "@/components/ui/icons";
+import { cn } from "@/lib/cn";
 import {
   ledgerHref,
   type LedgerQueryEntry,
@@ -90,7 +91,10 @@ export default function TransactionSortMenu({
         aria-expanded={open}
         onClick={toggle}
         disabled={isPending}
-        className="relative z-40 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border border-panel-border bg-panel px-3.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50"
+        className={cn(
+          "relative inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border border-panel-border bg-panel px-3.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50",
+          open && "z-40",
+        )}
       >
         Sort: {FIELD_LABELS[field]}, {directionLabel(field, direction)}
         <ChevronDown aria-hidden className="h-4 w-4" />
