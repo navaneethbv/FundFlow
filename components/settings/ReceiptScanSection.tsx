@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { formatCurrency } from "@/lib/format";
 import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 
 interface ScanResult {
@@ -18,7 +17,7 @@ interface ScanResult {
  * Receipt scanning (Bucket 2): the photo goes to the AI provider (that's
  * why it sits behind the AI consent), gets extracted, and — when a ledger
  * match is found — you choose whether to attach the line items as a note
- * via the existing annotate endpoint. The image itself is never stored.
+ * via the existing annotate endpoint. The image is stored only on explicit save.
  */
 export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: boolean }>) {
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -48,6 +47,8 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
         return;
       }
       setResult(data);
+    } catch {
+      setStatus("Could not read the receipt. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -57,16 +58,23 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
     if (!result?.matchedTransactionId) return;
     setStatus(null);
     const note = `Receipt: ${result.merchant} ${formatCurrency(result.amount)} on ${result.date}. Items: ${result.lineItems.join("; ")}`.slice(0, 500);
-    const response = await fetch("/api/transactions/annotate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        transaction_id: result.matchedTransactionId,
-        note,
-        tags: ["receipt"],
-      }),
-    });
-    setStatus(response.ok ? "Attached to the matching transaction." : "Could not attach the note.");
+    setBusy(true);
+    try {
+      const response = await fetch("/api/transactions/annotate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transaction_id: result.matchedTransactionId,
+          note,
+          tags: ["receipt"],
+        }),
+      });
+      setStatus(response.ok ? "Attached to the matching transaction." : "Could not attach the note.");
+    } catch {
+      setStatus("Could not attach the note. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveToInbox() {
@@ -77,13 +85,20 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
     form.set("merchant", result.merchant);
     form.set("purchaseDate", result.date);
     form.set("total", String(result.amount));
-    const response = await fetch("/api/receipts", { method: "POST", body: form });
-    const payload = await response.json().catch(() => null) as { error?: string } | null;
-    setStatus(
-      response.ok
-        ? "Saved to the receipt inbox."
-        : payload?.error ?? "Could not save the receipt.",
-    );
+    setBusy(true);
+    try {
+      const response = await fetch("/api/receipts", { method: "POST", body: form });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      setStatus(
+        response.ok
+          ? "Saved to the receipt inbox."
+          : payload?.error ?? "Could not save the receipt.",
+      );
+    } catch {
+      setStatus("Could not save the receipt. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -108,7 +123,7 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
           className="inline-flex min-h-11 cursor-pointer items-center rounded-field border border-panel-border bg-panel px-3 text-sm font-semibold text-accent hover:bg-panel-2 focus-within:outline-2"
         >
           {pickedName ? "Change photo" : "Choose a receipt photo"}
-          <Input
+          <input
             id="receipt-scan-file"
             type="file"
             name="file"
@@ -136,11 +151,11 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
             <p className="mt-1 text-xs text-muted">{result.lineItems.join(" · ")}</p>
           )}
           <p className="mt-2 text-xs">
-            <Button onClick={() => void saveToInbox()} variant="secondary" size="sm">
+            <Button onClick={() => void saveToInbox()} variant="secondary" size="sm" disabled={busy}>
               Save to receipt inbox
             </Button>
             {result.matchedTransactionId ? (
-              <Button onClick={attach} variant="ghost" size="sm">
+              <Button onClick={attach} variant="ghost" size="sm" disabled={busy}>
                 Attach to matching transaction
               </Button>
             ) : (
@@ -149,7 +164,7 @@ export default function ReceiptScanSection({ enabled }: Readonly<{ enabled: bool
           </p>
         </div>
       )}
-      {status && <p className="mt-2 text-sm text-muted">{status}</p>}
+      {status && <p role="status" className="mt-2 text-sm text-muted">{status}</p>}
     </Panel>
   );
 }

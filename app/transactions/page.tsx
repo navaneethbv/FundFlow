@@ -241,8 +241,12 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const transactionReviewEnabled = isFeatureEnabled("transactionReview");
   const transactionCalendarEnabled = isFeatureEnabled("transactionCalendar");
   const projectedLedgerEnabled = isFeatureEnabled("projectedLedgerRows");
-  const state = parseLedgerQuery(transactionReviewEnabled ? params : { ...params, review: "all" });
-  const { month, day, accountId, q, page, category, sub, merchant, flow, accountType } = state;
+  const state = parseLedgerQuery({
+    ...params,
+    ...(!transactionReviewEnabled ? { review: "all" } : {}),
+    ...(!transactionCalendarEnabled ? { view: "list" } : {}),
+  });
+  const { month, day, accountId, q, page, flow, accountType } = state;
   const visibleColumns = state.columns;
   const columnsAreDefault = !state.columnsSubmitted;
   // Gated: manual_account_id/source only exist once
@@ -344,6 +348,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     reviewFilter: state.review,
     typedIds,
     missingAccountId,
+    minAmount: state.minAmount,
+    maxAmount: state.maxAmount,
+    status: state.status,
   };
 
   const accountOptionsForFilters = accountOptions.map((account) => ({
@@ -474,7 +481,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         <Panel>
           <TransactionQueryControls
             key={JSON.stringify(queryEntries)}
-            committed={{ q, month, accountId, category, sub, merchant, flow, accountType, review: state.review }}
+            committed={state}
             entries={queryEntries}
             options={filterOptions}
             reviewEnabled={transactionReviewEnabled}

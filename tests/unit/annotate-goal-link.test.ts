@@ -162,14 +162,15 @@ describe("annotate route goal linking", () => {
     expect(annotation.payload).toMatchObject({ goal_id: GOAL_ID });
   });
 
-  it("clears the link and the annotation when goal_id is explicitly null", async () => {
+  it("clears only the goal link when goal_id is explicitly null", async () => {
     const { calls } = setup({ txn: TXN });
     await post({ transaction_id: TXN.id, goal_id: null });
 
     const annotation = calls.find(
       (call) => call.table === "transaction_annotations",
     )!;
-    expect(annotation.op).toBe("delete");
+    expect(annotation.op).toBe("upsert");
+    expect(annotation.payload).toEqual({ user_id: "user-1", transaction_id: TXN.id, goal_id: null });
   });
 
   it("writes a negative event for a spending-reduces goal on an expense", async () => {

@@ -55,12 +55,10 @@ function parseAnnotationFields(body: Record<string, unknown>) {
     typeof body.goal_id === "string" && body.goal_id.trim()
       ? body.goal_id.trim()
       : null;
-  const keepsGoalLink = goalProvided && goalId !== null;
   const clearedProvided = body.cleared !== undefined;
   const clearedAt = body.cleared === true ? new Date().toISOString() : null;
-  const hasMetadata = Boolean(note || tags.length > 0 || keepsGoalLink);
 
-  return { note, tags, goalProvided, goalId, clearedProvided, clearedAt, hasMetadata };
+  return { note, tags, goalProvided, goalId, clearedProvided, clearedAt };
 }
 
 async function saveAnnotation(
@@ -69,34 +67,20 @@ async function saveAnnotation(
   transactionId: string,
   body: Record<string, unknown>,
 ): Promise<void> {
-  const { note, tags, goalProvided, goalId, clearedProvided, clearedAt, hasMetadata } =
+  const { note, tags, goalProvided, goalId, clearedProvided, clearedAt } =
     parseAnnotationFields(body);
+  const noteProvided = body.note !== undefined;
+  const tagsProvided = body.tags !== undefined;
+  if (!noteProvided && !tagsProvided && !goalProvided && !clearedProvided) return;
 
-  if (!hasMetadata && !clearedProvided) {
-    const { error } = await supabase
-      .from("transaction_annotations")
-      .delete()
-      .eq("user_id", userId)
-      .eq("transaction_id", transactionId);
-    if (error) throw error;
-    return;
-  }
-
-  if (!hasMetadata && clearedProvided) {
-    const { error } = await supabase.from("transaction_annotations").upsert(
-      { user_id: userId, transaction_id: transactionId, cleared_at: clearedAt },
-      { onConflict: "user_id,transaction_id", defaultToNull: false },
-    );
-    if (error) throw error;
-    return;
-  }
-
+  // This row also owns classification, reconciliation, goal and rule metadata.
+  // Clearing notes must never delete it or overwrite fields absent from the request.
   const { error } = await supabase.from("transaction_annotations").upsert(
     {
       user_id: userId,
       transaction_id: transactionId,
-      note,
-      tags,
+      ...(noteProvided ? { note } : {}),
+      ...(tagsProvided ? { tags } : {}),
       ...(goalProvided ? { goal_id: goalId } : {}),
       ...(clearedProvided ? { cleared_at: clearedAt } : {}),
     },
@@ -231,8 +215,9 @@ async function saveGoalProgress(input: {
  * Save user annotations (note + tags) and category splits for one transaction.
  * Annotations sit alongside the immutable Plaid-synced row; splits, when they
  * sum to the transaction amount, redistribute its spend across categories in
- * dashboard aggregation. The whole payload is replace-semantics: empty note and
- * tags removes the annotation; empty/absent splits removes any splits.
+ * dashboard aggregation. Supplied fields replace their values: empty note and
+ * tags clear those fields while preserving other metadata. Omitted fields,
+ * including splits, are unchanged; an explicit empty splits array clears splits.
  */
 export async function POST(request: NextRequest) {
   const auth = await requireUser();

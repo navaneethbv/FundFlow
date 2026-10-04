@@ -265,8 +265,9 @@ function TransactionSplitSection({
 type AnnotationSnapshot = { note: string; tags: string[]; cleared: boolean };
 
 /** Close this editor when another row opens its details or Escape asks. */
-function useCloseOnOtherDetail(key: string, setOpen: (open: boolean) => void) {
+function useCloseOnOtherDetail(key: string, open: boolean, setOpen: (open: boolean) => void) {
   useEffect(() => {
+    if (!open) return;
     const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== key) setOpen(false); };
     const closeRequested = () => setOpen(false);
     window.addEventListener("fundflow:transaction-detail", closeOther);
@@ -275,7 +276,7 @@ function useCloseOnOtherDetail(key: string, setOpen: (open: boolean) => void) {
       window.removeEventListener("fundflow:transaction-detail", closeOther);
       window.removeEventListener("fundflow:transaction-detail-close", closeRequested);
     };
-  }, [key, setOpen]);
+  }, [key, open, setOpen]);
 }
 
 async function requestAnnotationUndo(transactionId: string, state: { expected: AnnotationSnapshot; restore: AnnotationSnapshot }): Promise<void> {
@@ -423,13 +424,14 @@ export default function TransactionEditor({
   const [error, setError] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<{ restore: { note: string; tags: string[]; cleared: boolean }; expected: { note: string; tags: string[]; cleared: boolean } } | null>(null);
 
-  useCloseOnOtherDetail(`${idPrefix}${transaction.id}`, setOpen);
+  useCloseOnOtherDetail(`${idPrefix}${transaction.id}`, open, setOpen);
 
   function openEditor() {
     if (detailsEnabled) window.dispatchEvent(new CustomEvent("fundflow:transaction-detail", { detail: `${idPrefix}${transaction.id}` }));
     setNote(saved.note);
     setTagText(saved.tags.join(", "));
     setRows(saved.splits.map(toSplitRow));
+    setCleared(savedCleared);
     setError(null);
     setOpen(true);
   }

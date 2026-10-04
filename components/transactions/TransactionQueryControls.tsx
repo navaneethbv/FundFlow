@@ -10,6 +10,8 @@ import { Calendar, ChevronDown, Search, X } from "@/components/ui/icons";
 import { formatMonth, titleCase } from "@/lib/format";
 import {
   hasActiveLedgerFilters,
+  CLEAR_LEDGER_FILTERS,
+  normalizeLedgerAmount,
   ledgerHref,
   type LedgerFilters,
   type LedgerQueryEntry,
@@ -18,18 +20,7 @@ import {
 import type { LedgerFilterOptions } from "@/lib/ledger-projection";
 
 type OpenPanel = "date" | "filters" | null;
-
-const CLEAR_FILTERS: LedgerQueryPatch = {
-  q: null,
-  month: null,
-  accountId: null,
-  category: null,
-  sub: null,
-  merchant: null,
-  flow: null,
-  accountType: null,
-  review: null,
-};
+type FilterChip = { key: keyof LedgerFilters; label: string; removeLabel: string };
 
 const triggerClasses =
   "inline-flex min-h-11 items-center gap-2 rounded-full border border-panel-border bg-panel px-4 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2";
@@ -42,7 +33,30 @@ function filterCount(filters: LedgerFilters): number {
     filters.merchant,
     filters.flow,
     filters.accountType,
+    filters.minAmount,
+    filters.maxAmount,
+    filters.status,
   ].filter(Boolean).length;
+}
+
+function dateFilterChips(committed: LedgerFilters): FilterChip[] {
+  return [
+    committed.month && {
+      key: "month",
+      label: formatMonth(committed.month),
+      removeLabel: `Remove date filter ${formatMonth(committed.month)}`,
+    },
+    committed.day && { key: "day", label: committed.day, removeLabel: `Remove day filter ${committed.day}` },
+    committed.year && { key: "year", label: committed.year, removeLabel: `Remove year filter ${committed.year}` },
+  ].filter((chip): chip is FilterChip => Boolean(chip));
+}
+
+function amountAndStatusChips(committed: LedgerFilters): FilterChip[] {
+  return [
+    committed.minAmount && { key: "minAmount", label: `Amount at least ${committed.minAmount}`, removeLabel: "Remove minimum amount filter" },
+    committed.maxAmount && { key: "maxAmount", label: `Amount at most ${committed.maxAmount}`, removeLabel: "Remove maximum amount filter" },
+    committed.status && { key: "status", label: committed.status === "pending" ? "Pending" : "Posted", removeLabel: "Remove posting status filter" },
+  ].filter((chip): chip is FilterChip => Boolean(chip));
 }
 
 function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
@@ -52,13 +66,10 @@ function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
         .flat()
         .find((option) => option.value === committed.sub)?.label
     : undefined;
-  const chips: Array<{ key: keyof LedgerFilters; label: string; removeLabel: string }> = [
+  const chips: FilterChip[] = [
     committed.q && { key: "q", label: `Search: ${committed.q}`, removeLabel: `Remove search filter ${committed.q}` },
-    committed.month && {
-      key: "month",
-      label: formatMonth(committed.month),
-      removeLabel: `Remove date filter ${formatMonth(committed.month)}`,
-    },
+    ...dateFilterChips(committed),
+    ...amountAndStatusChips(committed),
     committed.accountId && {
       key: "accountId",
       label: accountLabel ?? "Account",
@@ -89,7 +100,7 @@ function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
       label: titleCase(committed.accountType),
       removeLabel: `Remove account type filter ${titleCase(committed.accountType)}`,
     },
-  ].filter((chip): chip is { key: keyof LedgerFilters; label: string; removeLabel: string } => Boolean(chip));
+  ].filter((chip): chip is FilterChip => Boolean(chip));
 
   return chips;
 }
@@ -143,6 +154,7 @@ export default function TransactionQueryControls({
   const [search, setSearch] = useState(committed.q);
   const [monthDraft, setMonthDraft] = useState(committed.month);
   const [filterDraft, setFilterDraft] = useState(committed);
+  const [filterError, setFilterError] = useState<string | null>(null);
   const dateTriggerRef = useRef<HTMLButtonElement>(null);
   const filtersTriggerRef = useRef<HTMLButtonElement>(null);
   const datePanelRef = useRef<HTMLDialogElement>(null);
@@ -184,10 +196,21 @@ export default function TransactionQueryControls({
 
   function openFilters() {
     setFilterDraft(committed);
+    setFilterError(null);
     setOpen((current) => (current === "filters" ? null : "filters"));
   }
 
   function applyFilters() {
+    const min = filterDraft.minAmount ?? "";
+    const max = filterDraft.maxAmount ?? "";
+    if ((min && !normalizeLedgerAmount(min)) || (max && !normalizeLedgerAmount(max))) {
+      setFilterError("Enter non-negative amounts with at most two decimal places.");
+      return;
+    }
+    if (min && max && Number(min) > Number(max)) {
+      setFilterError("Minimum amount cannot exceed maximum amount.");
+      return;
+    }
     navigate(
       {
         accountId: filterDraft.accountId,
@@ -196,6 +219,9 @@ export default function TransactionQueryControls({
         merchant: filterDraft.merchant,
         flow: filterDraft.flow,
         accountType: filterDraft.accountType,
+        minAmount: min,
+        maxAmount: max,
+        status: filterDraft.status,
       },
       "filters",
     );
@@ -260,7 +286,7 @@ export default function TransactionQueryControls({
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
           {open === "date" && (
-            <dialog open ref={datePanelRef} aria-label="Date filter" className="absolute left-auto right-0 top-auto z-40 m-0 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float">
+            <dialog open ref={datePanelRef} aria-label="Date filter" className="fixed inset-x-4 top-[15vh] z-40 m-0 w-auto space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72">
               <label className="block text-xs font-semibold text-muted">
                 Month
                 <Input aria-label="Month" type="month" value={monthDraft} onChange={(event) => setMonthDraft(event.target.value)} className="mt-1" />
@@ -269,7 +295,7 @@ export default function TransactionQueryControls({
                 <Button variant="ghost" onClick={() => close("date")}>Cancel</Button>
                 <Button
                   onClick={() => {
-                    navigate({ month: monthDraft }, "date");
+                    navigate({ month: monthDraft, day: null, year: null }, "date");
                     setOpen(null);
                   }}
                   loading={isPending && pendingAction === "date"}
@@ -295,13 +321,29 @@ export default function TransactionQueryControls({
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
           {open === "filters" && (
-            <dialog open ref={filtersPanelRef} aria-label="Transaction filters" className="absolute left-auto right-0 top-auto z-40 m-0 mt-2 w-[min(24rem,calc(100vw-2rem))] space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float">
+            <dialog open ref={filtersPanelRef} aria-label="Transaction filters" className="fixed inset-x-4 top-[15vh] z-40 m-0 max-h-[70vh] w-auto space-y-4 overflow-y-auto rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96">
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-semibold text-muted">
                   Account
                   <Select aria-label="Account" value={filterDraft.accountId} onChange={(event) => setFilterDraft((value) => ({ ...value, accountId: event.target.value }))} className="mt-1">
                     <option value="">All accounts</option>
                     {options.accounts.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </Select>
+                </label>
+                <label className="text-xs font-semibold text-muted">
+                  Minimum amount
+                  <Input aria-label="Minimum amount" type="number" min="0" step="0.01" inputMode="decimal" value={filterDraft.minAmount ?? ""} onChange={(event) => setFilterDraft((value) => ({ ...value, minAmount: event.target.value }))} className="mt-1" />
+                </label>
+                <label className="text-xs font-semibold text-muted">
+                  Maximum amount
+                  <Input aria-label="Maximum amount" type="number" min="0" step="0.01" inputMode="decimal" value={filterDraft.maxAmount ?? ""} onChange={(event) => setFilterDraft((value) => ({ ...value, maxAmount: event.target.value }))} className="mt-1" />
+                </label>
+                <label className="text-xs font-semibold text-muted">
+                  Posting status
+                  <Select aria-label="Posting status" value={filterDraft.status ?? ""} onChange={(event) => setFilterDraft((value) => ({ ...value, status: event.target.value as LedgerFilters["status"] }))} className="mt-1">
+                    <option value="">Pending and posted</option>
+                    <option value="pending">Pending</option>
+                    <option value="posted">Posted</option>
                   </Select>
                 </label>
                 <label className="text-xs font-semibold text-muted">
@@ -342,6 +384,8 @@ export default function TransactionQueryControls({
                   </Select>
                 </label>
               </div>
+              <p className="text-xs text-muted">Amounts match money in or out, in each transaction&apos;s original currency. Use Account to limit the currency.</p>
+              {filterError && <p role="alert" className="text-sm text-danger">{filterError}</p>}
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => close("filters")}>Cancel</Button>
                 <Button onClick={applyFilters} loading={isPending && pendingAction === "filters"}>Apply</Button>
@@ -367,7 +411,7 @@ export default function TransactionQueryControls({
             </button>
           ))}
           {hasActiveLedgerFilters(committed) && (
-            <Button variant="ghost" onClick={() => navigate(CLEAR_FILTERS, "clear")} loading={isPending && pendingAction === "clear"}>
+            <Button variant="ghost" onClick={() => navigate(CLEAR_LEDGER_FILTERS, "clear")} loading={isPending && pendingAction === "clear"}>
               Clear filters
             </Button>
           )}

@@ -171,12 +171,12 @@ describe("coverage boost r7 n1: transactions/annotate POST", () => {
     expect(res.status).toBe(200);
   });
 
-  it("throws when deleting the annotation errors (L63, L68)", async () => {
+  it("reports a failed write when clearing notes and tags", async () => {
     mockRequireUser.mockResolvedValue({
       user: { id: "u1" },
       supabase: makeClient({
         txn: TXN,
-        tableErrors: { transaction_annotations: { delete: new Error("delete boom") } },
+        tableErrors: { transaction_annotations: { upsert: new Error("write boom") } },
       }),
     });
     const res = await POST(jsonRequest({ transaction_id: "t1", note: "", tags: [] }));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useId, useState, useSyncExternalStore } from "react";
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import FormMessage from "@/components/ui/FormMessage";
@@ -27,6 +27,7 @@ export default function AddManualHoldingForm({
   accounts,
 }: Readonly<{ accounts: AccountOption[] }>) {
   const router = useRouter();
+  const formId = useId();
   const defaultDate = useSyncExternalStore(
     () => () => undefined,
     () => localDateKey(),
@@ -76,6 +77,8 @@ export default function AddManualHoldingForm({
       setQuantity("");
       setPrice("");
       router.refresh();
+    } catch {
+      setError("Could not add the holding. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -92,11 +95,11 @@ export default function AddManualHoldingForm({
           Add manual holding
         </h2>
         <form onSubmit={submit} className="mt-4 space-y-3">
-          <Field label="Security name">
-            <Input value={securityName} onChange={(e) => setSecurityName(e.target.value)} required maxLength={160} />
+          <Field label="Security name" htmlFor={`${formId}-name`}>
+            <Input id={`${formId}-name`} value={securityName} onChange={(e) => setSecurityName(e.target.value)} required maxLength={160} />
           </Field>
-          <Field label="Account">
-            <Select value={accountKey} onChange={(e) => setAccountKey(e.target.value)}>
+          <Field label="Account" htmlFor={`${formId}-account`}>
+            <Select id={`${formId}-account`} value={accountKey} onChange={(e) => setAccountKey(e.target.value)}>
               {accounts.map((a) => (
                 <option key={`${a.source}:${a.id}`} value={`${a.source}:${a.id}`}>
                   {a.name}
@@ -105,8 +108,9 @@ export default function AddManualHoldingForm({
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Quantity">
+            <Field label="Quantity" htmlFor={`${formId}-quantity`}>
               <Input
+                id={`${formId}-quantity`}
                 type="number"
                 step="any"
                 min="0"
@@ -115,8 +119,9 @@ export default function AddManualHoldingForm({
                 required
               />
             </Field>
-            <Field label="Price">
+            <Field label="Price" htmlFor={`${formId}-price`}>
               <Input
+                id={`${formId}-price`}
                 type="number"
                 step="any"
                 min="0"
@@ -126,8 +131,9 @@ export default function AddManualHoldingForm({
               />
             </Field>
           </div>
-          <Field label="As of">
+          <Field label="As of" htmlFor={`${formId}-date`}>
             <Input
+              id={`${formId}-date`}
               type="date"
               value={asOf}
               max={localDateKey()}

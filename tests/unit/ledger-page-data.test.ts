@@ -143,6 +143,26 @@ describe("loadLedgerRowDetails", () => {
 });
 
 describe("loadLedgerRows", () => {
+  it.each(["", "merchant"])("applies absolute amount bounds and status before pagination and facets (%s)", async (sort) => {
+    const { client, queries } = fakeSupabase(() => ({ data: [] }));
+    await loadLedgerRows(input({ supabase: client, params: { sort }, filters: { minAmount: "10", maxAmount: "50", status: "posted" } }));
+    const transactionQueries = queries.filter((query) => query.table === "transactions");
+    expect(transactionQueries.length).toBeGreaterThan(0);
+    for (const { calls } of transactionQueries) {
+      expect(has(calls, "eq", "user_id", "user-1")).toBe(true);
+      expect(has(calls, "or", "amount.gte.10.00,amount.lte.-10.00")).toBe(true);
+      expect(has(calls, "gte", "amount", -50)).toBe(true);
+      expect(has(calls, "lte", "amount", 50)).toBe(true);
+      expect(has(calls, "eq", "pending", false)).toBe(true);
+    }
+  });
+
+  it("supports pending-only and ignores malformed amount bounds", async () => {
+    const { client, queries } = fakeSupabase(() => ({ data: [] }));
+    await loadLedgerRows(input({ supabase: client, filters: { minAmount: "0,amount.gt.0", maxAmount: "-2", status: "pending" } }));
+    expect(has(queries[0]!.calls, "eq", "pending", true)).toBe(true);
+    expect(queries[0]!.calls.some((call) => ["gte", "lte", "or"].includes(call.method))).toBe(false);
+  });
   it("reads one owner-scoped page directly and marks dates cut by the page edge", async () => {
     const page = Array.from({ length: 52 }, (_, index) => row(`t${index}`, index < 2 ? "2026-01-31" : index > 50 ? "2026-01-01" : "2026-01-15"));
     const { client, queries } = fakeSupabase((_table, select) => select === "id,date,amount"

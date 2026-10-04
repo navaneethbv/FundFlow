@@ -37,6 +37,7 @@ describe("PriceSpikeBanner Component", () => {
     expect(html).toContain("+20%");
     expect(html).toContain("+$36.00/yr");
     expect(html).toContain("View history");
+    expect(html).toContain('href="/transactions?q=Streaming%20Max"');
     expect(html).toContain("Dismiss all");
   });
 });
