@@ -1,10 +1,14 @@
 version: 2
+# Every ecosystem below is batched into one weekly pull request per repository.
+multi-ecosystem-groups:
+  all-dependencies:
+    schedule:
+      interval: weekly
 updates:
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+    patterns: ["*"]
+    multi-ecosystem-group: all-dependencies
     ignore:
       # TypeScript 7 is the native (Go) port. Its root export exposes only
       # { version, versionMajorMinor }; the compiler API moved to the
@@ -33,5 +37,5 @@ updates:
   # unit suites as the gate): plaid 47, nodemailer 10, vitest 5.
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: all-dependencies
