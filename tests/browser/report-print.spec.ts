@@ -191,3 +191,37 @@ for (const width of [375, 1440]) {
     expect(failures).toEqual([]);
   });
 }
+
+test("report tables support keyboard scrolling only while overflowing", async ({ page }) => {
+  await openFixture(page, 375);
+  for (const label of ["Category spending changes table", "Report transaction table"]) {
+    const region = page.getByRole("region", { name: label, exact: true });
+    await expect(region).toHaveAttribute("tabindex", "0");
+    await region.focus();
+    await expect(region).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => region.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const label of ["Category spending changes table", "Report transaction table"]) {
+    await expect(page.getByRole("region", { name: label, exact: true })).not.toHaveAttribute("tabindex");
+  }
+});
+
+
+test("scroll regions track vertical overflow and remove focus when it clears", async ({ page }) => {
+  await openFixture(page, 1440);
+  const region = page.getByRole("region", { name: "Report transaction table", exact: true });
+  await expect(region).not.toHaveAttribute("tabindex");
+  await region.evaluate(element => {
+    element.style.maxHeight = "150px";
+    element.style.overflowY = "auto";
+  });
+  await expect(region).toHaveAttribute("tabindex", "0");
+  expect(await region.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await region.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(() => region.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await region.evaluate(element => { element.style.maxHeight = "none"; });
+  await expect(region).not.toHaveAttribute("tabindex");
+});

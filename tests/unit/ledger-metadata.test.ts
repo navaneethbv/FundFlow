@@ -83,6 +83,13 @@ describe("effective ledger metadata", () => {
     expect(db.calls.every(call => call.ids.length <= IN_FILTER_CHUNK_SIZE && call.owner === "owner" && call.order === "id")).toBe(true);
   });
 
+  it("stops before subsequent ID batches after a failed metadata read", async () => {
+    const many = source(Array.from({ length: 401 }, (_, index) => String(index)));
+    const db = reader({}, "receipts");
+    await expect(filterLedgerMetadata(db.client, "owner", many, parseLedgerQuery({ receipt: "missing" }))).rejects.toThrow("timeout");
+    expect(db.calls).toHaveLength(1);
+  });
+
   it("does not infer missing receipts from a truncated metadata page", async () => {
     const db = reader(tables, undefined, "receipts");
     await expect(filterLedgerMetadata(db.client, "owner", rows, parseLedgerQuery({ receipt: "missing" }))).rejects.toThrow("ledger_incomplete_page");

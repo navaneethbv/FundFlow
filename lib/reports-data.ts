@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
-import { loadCanonicalProjection } from "@/lib/finance-query";
+import { loadCanonicalProjection, runBatched } from "@/lib/finance-query";
 import {
   parseFinancialScope,
   scopeQueryUserId,
@@ -58,7 +58,7 @@ export async function loadReportData(
     ...transactions.flatMap(row => row.manualAccountId ? [row.manualAccountId] : []),
     ...options.filters.accounts.filter(id => !names.has(id) && ACCOUNT_UUID.test(id)),
   ]);
-  for (const ids of chunkValues([...manualIds])) {
+  await runBatched(chunkValues([...manualIds]).map((ids) => async () => {
     let query = supabase.from("manual_accounts")
       .select("id, name", { count: "exact" })
       .in("id", ids)
@@ -72,7 +72,7 @@ export async function loadReportData(
       throw new Error("Incomplete report account labels");
     }
     for (const row of data) names.set(row.id, row.name);
-  }
+  }), 1);
 
   return {
     // The window above is a coarse bound; applyReportFilters is what enforces

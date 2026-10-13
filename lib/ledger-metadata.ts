@@ -3,6 +3,7 @@ import { collectLedgerChunks } from "@/lib/ledger-data";
 import type { LedgerFilters } from "@/lib/ledger-query";
 import type { LedgerProjectedRow } from "@/lib/ledger-projection";
 import { annotationProjectionColumns, storedRuleActions, tagsWithRuleActions } from "@/lib/rule-actions";
+import { runBatched } from "@/lib/finance-query";
 import { chunkValues } from "@/lib/postgrest-limits";
 
 type MetadataRow = { transaction_id: string; note?: string | null; tags?: string[] | null; cleared_at?: string | null };
@@ -14,7 +15,7 @@ export function needsLedgerMetadata(filters: LedgerFilters): boolean {
 /** Only IDs from the bounded owner scope enter these sequential, bounded reads. */
 async function loadMetadata(reader: SupabaseClient, ownerId: string, ids: string[], table: string, columns: string): Promise<MetadataRow[]> {
   const rows: MetadataRow[] = [];
-  for (const batch of chunkValues(ids)) {
+  await runBatched(chunkValues(ids).map((batch) => async () => {
     const loaded = await collectLedgerChunks<MetadataRow>(async (from, to) => {
       const result = await reader.from(table).select(columns, { count: "exact" }).eq("user_id", ownerId)
         .in("transaction_id", batch).order(table === "transaction_annotations" ? "transaction_id" : "id", { ascending: true }).range(from, to);
@@ -22,7 +23,7 @@ async function loadMetadata(reader: SupabaseClient, ownerId: string, ids: string
       return { rows: (result.data ?? []) as unknown as MetadataRow[], error: result.error, count: result.count };
     }, 1000, 20_000 - rows.length);
     rows.push(...loaded);
-  }
+  }), 1);
   return rows;
 }
 

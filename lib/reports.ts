@@ -490,6 +490,15 @@ function parseExplorationFields(raw: Record<string, unknown>): Pick<ReportFilter
   };
 }
 
+/** Null denotes personal scope; undefined denotes an invalid saved value. */
+function parseReportScope(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return undefined;
+  const scope = value.trim();
+  if (!scope || scope.length > MAX_SCOPE_LENGTH) return undefined;
+  return scope;
+}
+
 export function parseReportFilters(input: unknown): ReportFilters | null {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     return null;
@@ -508,13 +517,8 @@ export function parseReportFilters(input: unknown): ReportFilters | null {
 
   if (typeof raw.excludePending !== "boolean") return null;
 
-  let scope: string | null = null;
-  if (raw.scope !== null && raw.scope !== undefined) {
-    if (typeof raw.scope !== "string") return null;
-    const trimmed = raw.scope.trim();
-    if (!trimmed || trimmed.length > MAX_SCOPE_LENGTH) return null;
-    scope = trimmed;
-  }
+  const scope = parseReportScope(raw.scope);
+  if (scope === undefined) return null;
 
   const accounts = parseStringList(raw.accounts);
   const merchants = parseStringList(raw.merchants);
@@ -649,6 +653,16 @@ function listValue(value: string | string[] | undefined): string[] {
 
 export type ReportSearchParams = Record<string, string | string[] | undefined>;
 
+function reportSearchDateRange(params: ReportSearchParams, fallback: ReportFilters) {
+  const start = firstSearchParam(params.start);
+  const end = firstSearchParam(params.end);
+  const validStart = isIsoDate(start) ? start : fallback.start;
+  const validEnd = isIsoDate(end) ? end : fallback.end;
+  // An inverted hand-typed range falls back to the complete default range.
+  if (validStart > validEnd) return { start: fallback.start, end: fallback.end };
+  return { start: validStart, end: validEnd };
+}
+
 /**
  * Read filters off the URL. Unlike `parseReportFilters`, this never fails: a
  * hand-edited query string falls back to the default range and tab rather than
@@ -658,19 +672,14 @@ export function reportFiltersFromSearchParams(
   params: ReportSearchParams,
   fallback: ReportFilters,
 ): ReportFilters {
-  const start = firstSearchParam(params.start);
-  const end = firstSearchParam(params.end);
-  const validStart = isIsoDate(start) ? start : fallback.start;
-  const validEnd = isIsoDate(end) ? end : fallback.end;
+  const range = reportSearchDateRange(params, fallback);
   const interval = oneOf(firstSearchParam(params.interval), REPORT_INTERVALS) ?? fallback.interval;
   const comparison = oneOf(firstSearchParam(params.comparison), REPORT_COMPARISONS) ?? fallback.comparison;
   const currency = reportCurrency(firstSearchParam(params.currency)) ?? fallback.currency;
 
   return {
     version: REPORT_FILTERS_VERSION,
-    // An inverted hand-typed range would show nothing at all; fall back.
-    start: validStart <= validEnd ? validStart : fallback.start,
-    end: validStart <= validEnd ? validEnd : fallback.end,
+    ...range,
     tab: oneOf(firstSearchParam(params.tab), REPORT_TABS) ?? fallback.tab,
     mode: oneOf(firstSearchParam(params.mode), REPORT_MODES) ?? fallback.mode,
     dimension:

@@ -5,8 +5,8 @@ describe("ReportTransactions responsive table", () => {
   it("contains the wide table in a horizontal scroll region", () => {
     const source = readFileSync("components/reports/ReportTransactions.tsx", "utf8");
     expect(source).toMatch(/className="overflow-x-auto(?: [^"]*)?"/);
-    expect(source).toContain('aria-label="Report transaction table"');
-    expect(source).toContain('tabIndex={0}');
+    expect(source).toContain('label="Report transaction table"');
+    expect(source).toContain('<ScrollableRegion');
     expect(source).toContain('className="min-w-[42rem] w-full text-sm"');
   });
 });

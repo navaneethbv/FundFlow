@@ -1,3 +1,4 @@
+import ScrollableRegion from "@/components/ui/ScrollableRegion";
 import type { ReportComparisonResult } from "@/lib/report-analysis";
 import Panel from "@/components/ui/Panel";
 import { formatCurrency, inflowMarker } from "@/lib/format";
@@ -70,7 +71,7 @@ export default function ReportComparison({
         {comparison.categories.length === 0 ? (
           <p className="text-sm text-muted">No spending categories in either period.</p>
         ) : (
-          <div className="overflow-x-auto rounded-sm focus-visible:outline-2 focus-visible:outline-accent" tabIndex={0} role="region" aria-label="Category spending changes table">
+          <ScrollableRegion className="overflow-x-auto rounded-sm focus-visible:outline-2 focus-visible:outline-accent" label="Category spending changes table">
             <table className="w-full min-w-[36rem] text-sm">
               <caption className="sr-only">Category spending changes in {comparison.currency}</caption>
               <thead>
@@ -96,7 +97,7 @@ export default function ReportComparison({
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableRegion>
         )}
       </Panel>
     </section>

@@ -201,21 +201,22 @@ export function parseLedgerQuery(
 export function ledgerQueryEntries(
   state: LedgerQueryState,
 ): LedgerQueryEntry[] {
-  const entries: LedgerQueryEntry[] = [];
+  const entries = ledgerFilterEntries(state);
+  if (state.sort !== "date") entries.push(["sort", state.sort]);
+  if (state.direction !== "desc") entries.push(["direction", state.direction]);
+  if (state.page > 1) entries.push(["page", String(state.page)]);
+  entries.push(...ledgerColumnEntries(state));
+  if (state.view === "calendar") entries.push(["view", "calendar"]);
+  return entries;
+}
 
+function ledgerFilterEntries(state: LedgerQueryState): LedgerQueryEntry[] {
+  const entries: LedgerQueryEntry[] = [];
   for (const key of FILTER_KEYS) {
     const value = state[key];
     if (key === "review" && value === "all") continue;
     if (value) entries.push([key, value]);
   }
-  if (state.sort !== "date") entries.push(["sort", state.sort]);
-  if (state.direction !== "desc") {
-    entries.push(["direction", state.direction]);
-  }
-  if (state.page > 1) entries.push(["page", String(state.page)]);
-  entries.push(...ledgerColumnEntries(state));
-  if (state.view === "calendar") entries.push(["view", "calendar"]);
-
   return entries;
 }
 
@@ -279,23 +280,37 @@ export function hasActiveLedgerFilters(filters: LedgerFilters): boolean {
 }
 
 
-/** Custom ranges override month/year and constrain day drilldowns; calendar adds its visible-month intersection. */
-export function resolveLedgerDateBounds(filters: LedgerFilters, calendarMonth?: string): { start: string; end: string } | null {
-  const monthRange = (month: string) => {
-    const [year, number] = month.split("-").map(Number);
-    const date = new Date(0);
-    date.setUTCFullYear(year!, number!, 0);
-    return { start: `${month}-01`, end: `${month}-${String(date.getUTCDate()).padStart(2, "0")}` };
+type LedgerDateBounds = { start: string; end: string };
+
+function ledgerMonthRange(month: string): LedgerDateBounds {
+  const [year, number] = month.split("-").map(Number);
+  const date = new Date(0);
+  date.setUTCFullYear(year!, number!, 0);
+  return { start: `${month}-01`, end: `${month}-${String(date.getUTCDate()).padStart(2, "0")}` };
+}
+
+function selectedLedgerDateBounds(filters: LedgerFilters): LedgerDateBounds | null {
+  if (filters.day) return { start: filters.day, end: filters.day };
+  if (filters.start && filters.end) return { start: filters.start, end: filters.end };
+  if (filters.month) return ledgerMonthRange(filters.month);
+  if (filters.year) return { start: `${filters.year}-01-01`, end: `${filters.year}-12-31` };
+  return null;
+}
+
+function intersectLedgerDateBounds(left: LedgerDateBounds, right: LedgerDateBounds): LedgerDateBounds {
+  return {
+    start: left.start > right.start ? left.start : right.start,
+    end: left.end < right.end ? left.end : right.end,
   };
-  let bounds: { start: string; end: string } | null = null;
-  if (filters.day) bounds = { start: filters.day, end: filters.day };
-  else if (filters.start && filters.end) bounds = { start: filters.start, end: filters.end };
-  else if (filters.month) bounds = monthRange(filters.month);
-  else if (filters.year) bounds = { start: `${filters.year}-01-01`, end: `${filters.year}-12-31` };
+}
+
+/** Custom ranges override month/year and constrain day drilldowns; calendar adds its visible-month intersection. */
+export function resolveLedgerDateBounds(filters: LedgerFilters, calendarMonth?: string): LedgerDateBounds | null {
+  let bounds = selectedLedgerDateBounds(filters);
   if (filters.day && filters.start && filters.end) {
-    bounds = { start: filters.day > filters.start ? filters.day : filters.start, end: filters.day < filters.end ? filters.day : filters.end };
+    bounds = intersectLedgerDateBounds({ start: filters.day, end: filters.day }, { start: filters.start, end: filters.end });
   }
   if (!calendarMonth) return bounds;
-  const calendar = monthRange(calendarMonth);
-  return bounds ? { start: bounds.start > calendar.start ? bounds.start : calendar.start, end: bounds.end < calendar.end ? bounds.end : calendar.end } : calendar;
+  const calendar = ledgerMonthRange(calendarMonth);
+  return bounds ? intersectLedgerDateBounds(bounds, calendar) : calendar;
 }

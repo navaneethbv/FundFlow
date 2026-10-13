@@ -57,11 +57,13 @@ export function ReportSelectionControls({ filters, facets }: Readonly<{ filters:
     <p id="report-selection-help" className="mb-3 text-xs text-muted">Select one or more options. Leave a list unselected to include all. Use Ctrl or Command to select multiple options with a keyboard.</p>
     <div className="grid gap-3 sm:grid-cols-3">
       {([
-        ["accounts", "account", "Account"], ["categories", "category", "Category"], ["merchants", "merchant", "Merchant"],
-      ] as const).map(([key, name, label]) => <div key={key} className="min-w-0 text-sm font-semibold">
+        ["account", "Account", filters.accounts, facets?.accounts],
+        ["category", "Category", filters.categories, facets?.categories],
+        ["merchant", "Merchant", filters.merchants, facets?.merchants],
+      ] as const).map(([name, label, selected, options]) => <div key={name} className="min-w-0 text-sm font-semibold">
         <label htmlFor={`report-${name}`} className="mb-1 block text-xs text-muted">{label}</label>
-        <select id={`report-${name}`} name={name} multiple size={4} defaultValue={filters[key]} aria-describedby="report-selection-help" className={FIELD_CLASS}>
-          {selectedOptions(facets?.[key] ?? [], filters[key]).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        <select id={`report-${name}`} name={name} multiple size={4} defaultValue={selected} aria-describedby="report-selection-help" className={FIELD_CLASS}>
+          {selectedOptions(options ?? [], selected).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       </div>)}
     </div>

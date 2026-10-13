@@ -9,7 +9,10 @@ import {
 import { defaultReportFilters, type ReportFilters } from "@/lib/reports";
 import { clientStub } from "../fixtures/supabase-query";
 
-vi.mock("@/lib/finance-query", () => ({ loadCanonicalProjection: vi.fn() }));
+vi.mock("@/lib/finance-query", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/finance-query")>(),
+  loadCanonicalProjection: vi.fn(),
+}));
 
 function txn(
   partial: Partial<CanonicalFinanceTransaction>,
@@ -134,6 +137,15 @@ describe("loadReportData", () => {
     const batches = client.callsOn("manual_accounts").filter(call => call.method === "in");
     expect(batches.map(call => (call.args[1] as string[]).length)).toEqual([150, 150, 1]);
     expect(client.callsOn("manual_accounts").some(call => call.method === "eq")).toBe(false);
+  });
+
+  it("stops before later account batches when a label read fails", async () => {
+    const accounts = Array.from({ length: 301 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    const client = clientStub({ manual_accounts: { error: { code: "42501" } } });
+    await expect(loadReportData(client as never, {
+      scope: { kind: "mine", ownerUserId: "user-1" }, filters: { ...filters, accounts },
+    })).rejects.toBeDefined();
+    expect(client.callsOn("manual_accounts").filter(call => call.method === "in")).toHaveLength(1);
   });
 
   it.each([

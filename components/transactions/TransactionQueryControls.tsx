@@ -151,6 +151,11 @@ function ReviewViews({ current, count, pending, navigate }: Readonly<{
   );
 }
 
+function dateFilterLabel(filters: LedgerFilters): string {
+  if (filters.start || filters.end) return "Date: Custom range";
+  return filters.month ? `Date: ${formatMonth(filters.month)}` : "Date";
+}
+
 export default function TransactionQueryControls({
   committed,
   entries,
@@ -312,7 +317,7 @@ export default function TransactionQueryControls({
             className={triggerClasses}
           >
             <Calendar aria-hidden className="h-4 w-4" />
-            {committed.start || committed.end ? "Date: Custom range" : committed.month ? `Date: ${formatMonth(committed.month)}` : "Date"}
+            {dateFilterLabel(committed)}
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
           {open === "date" && (

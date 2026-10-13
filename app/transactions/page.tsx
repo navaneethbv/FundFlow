@@ -219,6 +219,25 @@ function redirectInvalidLedgerPage(state: LedgerQueryState, ledgerError: string,
   redirect(ledgerHref(ledgerQueryEntries(state), { page: totalPages > 1 ? String(totalPages) : null }, { resetPage: false }));
 }
 
+function ledgerBounds(state: LedgerQueryState, calendarMonth: string) {
+  if (state.dateError) return null;
+  return resolveLedgerDateBounds(state, state.view === "calendar" ? calendarMonth : undefined);
+}
+
+function enabledLedgerQuery(params: LedgerRawSearchParams) {
+  const transactionReviewEnabled = isFeatureEnabled("transactionReview");
+  const transactionCalendarEnabled = isFeatureEnabled("transactionCalendar");
+  const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
+  const transactionDetailsEnabled = isFeatureEnabled("transactionDetails");
+  return parseLedgerQuery({
+    ...params,
+    ...(!transactionReviewEnabled ? { review: "all" } : {}),
+    ...(!transactionCalendarEnabled ? { view: "list" } : {}),
+    ...(!transactionsParityEnabled ? { source: "", receipt: "" } : {}),
+    ...(!transactionDetailsEnabled ? { cleared: "" } : {}),
+  });
+}
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const transactionReviewEnabled = isFeatureEnabled("transactionReview");
@@ -226,13 +245,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const projectedLedgerEnabled = isFeatureEnabled("projectedLedgerRows");
   const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
   const transactionDetailsEnabled = isFeatureEnabled("transactionDetails");
-  const state = parseLedgerQuery({
-    ...params,
-    ...(!transactionReviewEnabled ? { review: "all" } : {}),
-    ...(!transactionCalendarEnabled ? { view: "list" } : {}),
-    ...(!transactionsParityEnabled ? { source: "", receipt: "" } : {}),
-    ...(!transactionDetailsEnabled ? { cleared: "" } : {}),
-  });
+  const state = enabledLedgerQuery(params);
   const { month, day, accountId, q, page, flow, accountType } = state;
   const visibleColumns = state.columns;
   const columnsAreDefault = !state.columnsSubmitted;
@@ -317,7 +330,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   const viewerToday = await resolveViewerToday(supabase, ownerId);
   const calendarMonth = month || day?.slice(0, 7) || state.start?.slice(0, 7) || viewerToday.slice(0, 7);
   const effectiveMonth = state.view === "calendar" ? calendarMonth : month;
-  const bounds = state.dateError ? null : resolveLedgerDateBounds(state, state.view === "calendar" ? calendarMonth : undefined);
+  const bounds = ledgerBounds(state, calendarMonth);
   const typedIds = accountType
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
     : [];
