@@ -19,6 +19,15 @@ export type LedgerSortDirection = "asc" | "desc";
 export type LedgerReviewFilter = "all" | "needs_review" | "reviewed";
 
 export interface LedgerRawSearchParams {
+  start?: string | string[];
+  end?: string | string[];
+  tag?: string | string[];
+  tagState?: string | string[];
+  note?: string | string[];
+  cleared?: string | string[];
+  source?: string | string[];
+  receipt?: string | string[];
+  split?: string | string[];
   month?: string | string[];
   day?: string | string[];
   year?: string | string[];
@@ -43,6 +52,15 @@ export interface LedgerRawSearchParams {
 
 export interface LedgerFilters {
   q: string;
+  start?: string;
+  end?: string;
+  tag?: string;
+  tagState?: "" | "tagged" | "untagged";
+  note?: string;
+  cleared?: "" | "cleared" | "uncleared";
+  source?: "" | "plaid" | "import" | "manual";
+  receipt?: "" | "attached" | "missing";
+  split?: "" | "split" | "unsplit";
   month: string;
   day?: string;
   year?: string;
@@ -60,6 +78,7 @@ export interface LedgerFilters {
 }
 
 export interface LedgerQueryState extends LedgerFilters {
+  dateError: string;
   view: "list" | "calendar";
   sort: LedgerSortField;
   direction: LedgerSortDirection;
@@ -81,6 +100,7 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const YEAR_RE = /^\d{4}$/;
 const DAY_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const FILTER_KEYS = [
+  "start", "end", "tag", "tagState", "note", "cleared", "source", "receipt", "split",
   "q",
   "month",
   "day",
@@ -122,14 +142,39 @@ function oneOf<T extends string>(value: string, allowed: readonly T[], fallback:
   return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
+export function isLedgerDate(value: string): boolean {
+  if (!DAY_RE.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(0);
+  date.setUTCFullYear(year!, month! - 1, day!);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month! - 1 && date.getUTCDate() === day;
+}
+
+export function ledgerDateRangeError(start: string, end: string): string {
+  if (!start && !end) return "";
+  if (!isLedgerDate(start) || !isLedgerDate(end)) return "Enter a valid start and end date.";
+  if (start > end) return "Start date cannot be after end date.";
+  return "";
+}
+
 export function parseLedgerQuery(
   raw: LedgerRawSearchParams,
 ): LedgerQueryState {
   const param = (value: string | string[] | undefined) => firstSearchParamOrEmpty(value);
   return {
     q: sanitizeLedgerSearch(param(raw.q)),
+    start: param(raw.start).slice(0, 64),
+    end: param(raw.end).slice(0, 64),
+    dateError: ledgerDateRangeError(param(raw.start), param(raw.end)),
+    tag: param(raw.tag).trim().slice(0, 50),
+    tagState: oneOf(param(raw.tagState), ["tagged", "untagged"] as const, ""),
+    note: param(raw.note).trim().slice(0, 500),
+    cleared: oneOf(param(raw.cleared), ["cleared", "uncleared"] as const, ""),
+    source: oneOf(param(raw.source), ["plaid", "import", "manual"] as const, ""),
+    receipt: oneOf(param(raw.receipt), ["attached", "missing"] as const, ""),
+    split: oneOf(param(raw.split), ["split", "unsplit"] as const, ""),
     month: matching(MONTH_RE, param(raw.month)),
-    day: matching(DAY_RE, param(raw.day)),
+    day: isLedgerDate(param(raw.day)) ? param(raw.day) : "",
     year: matching(YEAR_RE, param(raw.year)),
     accountId: matching(UUID_RE, param(raw.accountId)),
     category: matching(CATEGORY_RE, param(raw.category)),
@@ -231,4 +276,26 @@ export function hasActiveLedgerFilters(filters: LedgerFilters): boolean {
     if (key === "review") return filters.review !== "all";
     return Boolean(filters[key]);
   });
+}
+
+
+/** Custom ranges override month/year and constrain day drilldowns; calendar adds its visible-month intersection. */
+export function resolveLedgerDateBounds(filters: LedgerFilters, calendarMonth?: string): { start: string; end: string } | null {
+  const monthRange = (month: string) => {
+    const [year, number] = month.split("-").map(Number);
+    const date = new Date(0);
+    date.setUTCFullYear(year!, number!, 0);
+    return { start: `${month}-01`, end: `${month}-${String(date.getUTCDate()).padStart(2, "0")}` };
+  };
+  let bounds: { start: string; end: string } | null = null;
+  if (filters.day) bounds = { start: filters.day, end: filters.day };
+  else if (filters.start && filters.end) bounds = { start: filters.start, end: filters.end };
+  else if (filters.month) bounds = monthRange(filters.month);
+  else if (filters.year) bounds = { start: `${filters.year}-01-01`, end: `${filters.year}-12-31` };
+  if (filters.day && filters.start && filters.end) {
+    bounds = { start: filters.day > filters.start ? filters.day : filters.start, end: filters.day < filters.end ? filters.day : filters.end };
+  }
+  if (!calendarMonth) return bounds;
+  const calendar = monthRange(calendarMonth);
+  return bounds ? { start: bounds.start > calendar.start ? bounds.start : calendar.start, end: bounds.end < calendar.end ? bounds.end : calendar.end } : calendar;
 }

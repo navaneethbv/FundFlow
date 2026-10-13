@@ -125,7 +125,8 @@ export default function ReportTransactions({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div role="region" aria-label="Report transaction table" tabIndex={0}
+        className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-accent">
         <table className="min-w-[42rem] w-full text-sm">
           <caption className="sr-only">
             {groupByDate

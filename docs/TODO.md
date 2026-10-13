@@ -1,5 +1,12 @@
 # FundFlow — Future Todos
 
+## Proposed transaction and reporting essentials, 2026-10-13
+
+The `feat/transaction-reporting-essentials` branch implements the 15 additions in
+[the feature contract](superpowers/specs/2026-10-13-transaction-reporting-essentials.md), including the previously recorded tag/untagged ledger filter and report-period preset gaps.
+No migration, feature-flag change, or production deployment is part of this PR.
+Report-section layout persistence and the existing atomic-write follow-ups remain separate work.
+
 ## Current review: Functionality and Sure parity, 2026-10-03
 
 PR #220 is merged and deployed at main `27d951a`, including the ledger/form fixes and amount-range and pending/posted ledger filters.
@@ -8,8 +15,8 @@ Read-only production acceptance found a remaining Sort-trigger layering defect; 
 Production data was not changed.
 
 - Make split replacement, annotation updates, and linked goal-progress writes atomic, with owner validation and disposable database failure/concurrency tests.
-- Add tag/untagged ledger filters with pagination-safe query semantics.
-- Evaluate report period presets and report-section layout persistence separately from existing dashboard customization.
+- Tag/untagged ledger filters and report period presets are implemented in the proposed branch above; deployment remains pending review.
+- Evaluate report-section layout persistence separately from existing dashboard customization.
 - Historical FX, additional connectors, native clients/FinanceKit, and broader integration APIs require product/provider/security decisions before implementation.
 - Complete disposable-environment acceptance for mutation, authentication, storage, import undo, and delivery flows.
   Read-only live checks and synthetic browser tests do not substitute for those end-to-end checks.

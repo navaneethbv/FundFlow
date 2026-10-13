@@ -103,3 +103,27 @@ describe("TransactionQueryControls", () => {
     expect(html).toContain("You&#x27;re all caught up across all accounts.");
   });
 });
+
+it("renders removable chips for dates and every metadata filter", async () => {
+  const { parseLedgerQuery, ledgerQueryEntries } = await import("@/lib/ledger-query");
+  const state = parseLedgerQuery({ start: "2024-02-29", end: "2024-03-01", tag: "work", tagState: "tagged", note: "50%", cleared: "uncleared", source: "import", receipt: "missing", split: "split" });
+  const html = renderToStaticMarkup(createElement(TransactionQueryControls, { committed: state, entries: ledgerQueryEntries(state), options: { accounts: [], categories: [], subcategoriesByCategory: {}, merchants: [] }, parityEnabled: true, detailsEnabled: true }));
+  for (const label of ["custom date range", "tag", "tag status", "note", "cleared status", "source", "receipt", "split"]) expect(html).toContain(`aria-label="Remove ${label} filter"`);
+  expect(html).toContain("Clear filters");
+});
+
+it("keeps filters and sort in calendar drilldowns while returning to the list", async () => {
+  const { default: TransactionCalendar } = await import("@/components/transactions/TransactionCalendar");
+  const { parseLedgerQuery, ledgerQueryEntries } = await import("@/lib/ledger-query");
+  const state = parseLedgerQuery({ view: "calendar", start: "2024-02-29", end: "2024-03-01", tag: "work", note: "50%", source: "import", sort: "amount", page: "3" });
+  const html = renderToStaticMarkup(createElement(TransactionCalendar, { month: "2024-02", rows: [{ id: "t1", date: "2024-02-29", amount: 5, merchant: "Cafe" }], entries: ledgerQueryEntries(state) }));
+  const href = html.match(/href="([^"]*day=2024-02-29[^"]*)"/)?.[1]?.replaceAll("&amp;", "&");
+  expect(href).toBeTruthy();
+  const query = new URL(href!, "https://fundflow.test").searchParams;
+  expect(query.get("tag")).toBe("work");
+  expect(query.get("note")).toBe("50%");
+  expect(query.get("source")).toBe("import");
+  expect(query.get("sort")).toBe("amount");
+  expect(query.has("view")).toBe(false);
+  expect(query.has("page")).toBe(false);
+});

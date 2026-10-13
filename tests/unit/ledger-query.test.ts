@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLEAR_LEDGER_FILTERS,
+  resolveLedgerDateBounds,
   hasActiveLedgerFilters,
   ledgerHref,
   ledgerQueryEntries,
@@ -188,4 +189,50 @@ describe("savedLedgerViewParams", () => {
     const ascDateState = parseLedgerQuery({ sort: "date", direction: "asc" });
     expect(savedLedgerViewParams(ascDateState)).toEqual({ direction: "asc" });
   });
+});
+
+describe("transaction metadata filters", () => {
+  it("round trips literal note/tag text and validated filter enums through saved views and clear", () => {
+    const values = { start: "2024-02-29", end: "2024-03-01", tag: "100%_work", note: "Receipt_(50%)", tagState: "tagged", cleared: "uncleared", source: "import", receipt: "missing", split: "split" };
+    const state = parseLedgerQuery(values);
+    expect(savedLedgerViewParams(state)).toEqual(values);
+    expect(Object.fromEntries(ledgerQueryEntries(state))).toEqual(values);
+    expect(hasActiveLedgerFilters(state)).toBe(true);
+    expect(ledgerHref(ledgerQueryEntries(state), CLEAR_LEDGER_FILTERS)).toBe("/transactions");
+  });
+
+  it.each([
+    { start: "2023-02-29", end: "2023-03-01" },
+    { start: "2024-04-31", end: "2024-05-01" },
+    { start: "2024-03-02", end: "2024-03-01" },
+    { start: "2024-01-01" },
+  ])("reports invalid or incomplete custom ranges without silently discarding them: %j", (raw) => {
+    expect(parseLedgerQuery(raw).dateError).toBeTruthy();
+  });
+
+  it("rejects invalid metadata enums without turning note grammar into a query", () => {
+    const state = parseLedgerQuery({ tagState: "bad", cleared: "bad", source: "bad", receipt: "bad", split: "bad", note: "  a%,()._\\  " });
+    expect(state).toMatchObject({ tagState: "", cleared: "", source: "", receipt: "", split: "", note: "a%,()._\\", dateError: "" });
+  });
+});
+
+
+describe("ledger date bounds", () => {
+  it("uses inclusive leap-day bounds and intersects calendar month", () => {
+    const state = parseLedgerQuery({ start: "2024-02-29", end: "2024-03-03", month: "2024-02", year: "2023" });
+    expect(resolveLedgerDateBounds(state)).toEqual({ start: "2024-02-29", end: "2024-03-03" });
+    expect(resolveLedgerDateBounds(state, "2024-02")).toEqual({ start: "2024-02-29", end: "2024-02-29" });
+  });
+  it("preserves day, month, year precedence and supports an unbounded default", () => {
+    expect(resolveLedgerDateBounds(parseLedgerQuery({ day: "2024-03-01", start: "2024-02-01", end: "2024-04-01" }))).toEqual({ start: "2024-03-01", end: "2024-03-01" });
+    expect(resolveLedgerDateBounds(parseLedgerQuery({ month: "2024-02", year: "2023" }))).toEqual({ start: "2024-02-01", end: "2024-02-29" });
+    expect(resolveLedgerDateBounds(parseLedgerQuery({ year: "2023" }))).toEqual({ start: "2023-01-01", end: "2023-12-31" });
+    expect(resolveLedgerDateBounds(parseLedgerQuery({}))).toBeNull();
+    expect(resolveLedgerDateBounds(parseLedgerQuery({}), "2024-02")).toEqual({ start: "2024-02-01", end: "2024-02-29" });
+  });
+});
+
+it("does not broaden a custom date range when a day drilldown falls outside it", () => {
+  const bounds = resolveLedgerDateBounds(parseLedgerQuery({ start: "2024-02-29", end: "2024-03-01", day: "2024-02-28" }));
+  expect(bounds!.start > bounds!.end).toBe(true);
 });

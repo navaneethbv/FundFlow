@@ -96,3 +96,24 @@ describe("/transactions row ordering", () => {
     ]);
   });
 });
+
+describe("/transactions date and subsystem filters", () => {
+  it("sends both inclusive custom date boundaries to the transaction query", async () => {
+    await TransactionsPage({ searchParams: Promise.resolve({ start: "2024-02-29", end: "2024-03-01" }) });
+    const calls = supabase.callsOn("transactions");
+    expect(calls.some(call => call.method === "gte" && call.args[0] === "date" && call.args[1] === "2024-02-29")).toBe(true);
+    expect(calls.some(call => call.method === "lte" && call.args[0] === "date" && call.args[1] === "2024-03-01")).toBe(true);
+  });
+
+  it("does not load transactions for an invalid range", async () => {
+    await TransactionsPage({ searchParams: Promise.resolve({ start: "2023-02-29", end: "2023-03-01" }) });
+    expect(supabase.callsOn("transactions")).toEqual([]);
+  });
+
+  it("does not read gated source, receipt or cleared filters when their subsystem is disabled", async () => {
+    await TransactionsPage({ searchParams: Promise.resolve({ source: "manual", receipt: "missing", cleared: "uncleared" }) });
+    expect(supabase.callsOn("receipts")).toEqual([]);
+    expect(supabase.callsOn("transaction_annotations")).toEqual([]);
+    expect(supabase.callsOn("transactions").some(call => call.method === "eq" && call.args[0] === "source")).toBe(false);
+  });
+});

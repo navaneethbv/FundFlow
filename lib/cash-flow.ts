@@ -1,8 +1,10 @@
 import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import { UNKNOWN_CURRENCY } from "@/lib/format";
 import { computeSavingsRate } from "@/lib/finance-metrics";
+import { formatDate } from "@/lib/format-date";
 
 export type CashFlowPeriod = "monthly" | "quarterly" | "yearly";
+export type ReportTrendPeriod = CashFlowPeriod | "daily" | "weekly";
 export type BreakdownDimension = "category" | "group" | "merchant";
 export type BreakdownDirection = "income" | "expense";
 
@@ -45,7 +47,9 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function periodLabel(key: string, period: CashFlowPeriod): string {
+function periodLabel(key: string, period: ReportTrendPeriod): string {
+  if (period === "daily") return formatDate(key);
+  if (period === "weekly") return `Week of ${formatDate(key)}`;
   if (period === "yearly") return key;
   if (period === "quarterly") {
     const [year, quarter] = key.split("-");
@@ -57,8 +61,15 @@ function periodLabel(key: string, period: CashFlowPeriod): string {
 
 export function cashFlowPeriodKey(
   date: string,
-  period: CashFlowPeriod,
+  period: ReportTrendPeriod,
 ): string {
+  if (period === "daily") return date;
+  if (period === "weekly") {
+    // UTC arithmetic on a calendar key, never the viewer's current instant.
+    const monday = new Date(`${date}T00:00:00Z`);
+    monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+    return monday.toISOString().slice(0, 10);
+  }
   const year = date.slice(0, 4);
   if (period === "yearly") return year;
   const month = Number(date.slice(5, 7));
@@ -70,7 +81,7 @@ export function cashFlowPeriodKey(
 
 export function computePeriodCashFlow(
   txns: CanonicalFinanceTransaction[],
-  period: CashFlowPeriod,
+  period: ReportTrendPeriod,
 ): PeriodCashFlow[] {
   const totals = new Map<string, { income: number; expenses: number }>();
   for (const row of txns) {

@@ -1,0 +1,55 @@
+/* Scoped to Reports so ordinary browser printing elsewhere stays unchanged. */
+@media print {
+  .reports-print-surface {
+    --background: #fff;
+    --panel: #fff;
+    --panel-2: #fff;
+    --foreground: #111;
+    --muted: #444;
+    color: #111;
+    background: #fff;
+  }
+
+  .reports-print-surface :is(aside, nav, button, form, [data-report-no-print]) {
+    display: none !important;
+  }
+
+  .reports-print-surface main {
+    padding: 0;
+    width: 100%;
+  }
+
+  .reports-print-surface :is(.shadow-card, .shadow-sm) {
+    box-shadow: none;
+  }
+
+  .reports-print-surface :is(.overflow-x-auto, .reports-chart-content) {
+    overflow: visible;
+  }
+
+  .reports-print-surface table {
+    min-width: 0;
+    width: 100%;
+    font-size: 9pt;
+  }
+
+  .reports-print-surface :is(th, td) {
+    overflow-wrap: anywhere;
+  }
+
+  .reports-print-surface .truncate {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+  }
+
+  .reports-print-surface :is(tr, svg) {
+    break-inside: avoid;
+  }
+
+  .reports-print-surface thead {
+    display: table-header-group;
+  }
+
+  /* Privacy blur remains in force; printing must never reveal hidden money. */
+}

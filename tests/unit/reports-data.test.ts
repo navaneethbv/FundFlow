@@ -32,6 +32,7 @@ function txn(
 }
 
 const filters: ReportFilters = defaultReportFilters("2026-07");
+const manualId = "00000000-0000-4000-8000-000000000001";
 
 describe("loadReportData", () => {
   beforeEach(() => {
@@ -81,6 +82,21 @@ describe("loadReportData", () => {
     expect(result.transactions.map((row) => row.id)).toEqual(["in-range"]);
   });
 
+  it("retains bounded facets before account, category, and merchant selection", async () => {
+    vi.mocked(loadCanonicalProjection).mockResolvedValue({
+      transactions: [txn({ id: "chosen", merchant: "Shop" }), txn({ id: "other", merchant: "Cafe" })],
+      currencyByAccountId: new Map([["acct-1", "USD"]]),
+      accountNames: new Map([["acct-1", "Checking"]]),
+      truncated: false,
+    });
+    const result = await loadReportData(clientStub() as never, {
+      scope: { kind: "mine", ownerUserId: "user-1" }, filters: { ...filters, merchants: ["Shop"] },
+    });
+    expect(result.transactions.map(row => row.id)).toEqual(["chosen"]);
+    expect(result.facetTransactions?.map(row => row.id)).toEqual(["chosen", "other"]);
+    expect(result.accountNames?.get("acct-1")).toBe("Checking");
+  });
+
   it("passes truncation through so the page can say so", async () => {
     vi.mocked(loadCanonicalProjection).mockResolvedValue({
       transactions: [],
@@ -92,6 +108,53 @@ describe("loadReportData", () => {
       filters,
     });
     expect(result.truncated).toBe(true);
+  });
+
+  it("labels manual accounts without changing their currency classification", async () => {
+    const currencies = new Map([["acct-1", "USD"]]);
+    vi.mocked(loadCanonicalProjection).mockResolvedValue({
+      transactions: [txn({ accountId: null, manualAccountId: "cash", source: "manual" })],
+      currencyByAccountId: currencies,
+      accountNames: new Map([["acct-1", "Checking"]]),
+      truncated: false,
+    });
+    const client = clientStub({ manual_accounts: { data: [{ id: "cash", name: "Cash wallet" }], count: 1 } });
+    const result = await loadReportData(client as never, { scope: { kind: "mine", ownerUserId: "user-1" }, filters });
+    expect(result.accountNames).toEqual(new Map([["acct-1", "Checking"], ["cash", "Cash wallet"]]));
+    expect(result.currencyByAccountId).toBe(currencies);
+    expect(client.scopedToUser("manual_accounts", "user-1")).toBe(true);
+  });
+
+  it("bounds selected-account label reads and lets household RLS control visibility", async () => {
+    const accounts = Array.from({ length: 301 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    const client = clientStub({ manual_accounts: { data: [], count: 0 } });
+    await loadReportData(client as never, {
+      scope: { kind: "household", householdId: "hh-1" }, filters: { ...filters, accounts },
+    });
+    const batches = client.callsOn("manual_accounts").filter(call => call.method === "in");
+    expect(batches.map(call => (call.args[1] as string[]).length)).toEqual([150, 150, 1]);
+    expect(client.callsOn("manual_accounts").some(call => call.method === "eq")).toBe(false);
+  });
+
+  it.each([
+    { error: { code: "42501" } },
+    { data: null, count: 1 },
+    { data: [] },
+    { data: [], count: 1 },
+  ])("rejects failed or incomplete account-label reads: %j", async (response) => {
+    const client = clientStub({ manual_accounts: response });
+    await expect(loadReportData(client as never, {
+      scope: { kind: "mine", ownerUserId: "user-1" }, filters: { ...filters, accounts: [manualId] },
+    })).rejects.toBeDefined();
+  });
+
+  it("keeps malformed account selections empty without sending them to a UUID column", async () => {
+    const client = clientStub({ manual_accounts: { error: { code: "22P02" } } });
+    const result = await loadReportData(client as never, {
+      scope: { kind: "mine", ownerUserId: "user-1" }, filters: { ...filters, accounts: ["invalid"] },
+    });
+    expect(result.transactions).toEqual([]);
+    expect(client.callsOn("manual_accounts")).toEqual([]);
   });
 
   it("forwards a household scope untouched", async () => {

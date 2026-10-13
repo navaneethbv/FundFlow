@@ -2,7 +2,7 @@ import { financeTotals, type CanonicalFinanceTransaction } from "@/lib/finance-d
 import type { BreakdownDimension } from "@/lib/cash-flow";
 import type { SankeyLink, SankeyNode } from "@/lib/sankey";
 import { subcategoryLabel } from "@/lib/drilldown";
-import { titleCase } from "@/lib/format";
+import { titleCase, UNKNOWN_CURRENCY } from "@/lib/format";
 import { foldTail } from "@/lib/chart-utils";
 import { firstSearchParam } from "@/lib/search-params";
 
@@ -368,9 +368,13 @@ export type ReportTab = "cash_flow" | "spending" | "income";
 export type ReportMode = "breakdown" | "trends";
 export type ReportSort = "date" | "merchant" | "amount";
 export type ReportDirection = "asc" | "desc";
+export type ReportInterval = "daily" | "weekly" | "monthly";
+export type ReportComparison = "none" | "previous_period" | "previous_year";
 
 const REPORT_SORTS: readonly ReportSort[] = ["date", "merchant", "amount"];
 const REPORT_DIRECTIONS: readonly ReportDirection[] = ["asc", "desc"];
+const REPORT_INTERVALS: readonly ReportInterval[] = ["daily", "weekly", "monthly"];
+const REPORT_COMPARISONS: readonly ReportComparison[] = ["none", "previous_period", "previous_year"];
 
 export interface ReportFilters {
   version: typeof REPORT_FILTERS_VERSION;
@@ -396,6 +400,11 @@ export interface ReportFilters {
   sort: ReportSort;
   /** "desc" is the default, matching the register's newest-first date order. */
   direction: ReportDirection;
+  /** Optional additions to v2; omitted legacy fields retain their old defaults. */
+  interval?: ReportInterval;
+  comparison?: ReportComparison;
+  /** ISO code or the explicit unknown-currency bucket; never an FX conversion. */
+  currency?: string;
 }
 
 export const REPORT_TABS: readonly ReportTab[] = ["cash_flow", "spending", "income"];
@@ -461,6 +470,26 @@ function parseSortFields(
   return { sort: sort ?? "date", direction: direction ?? "desc" };
 }
 
+function reportCurrency(value: unknown): string | null {
+  return typeof value === "string" && (/^[A-Z]{3}$/.test(value) || value === UNKNOWN_CURRENCY)
+    ? value
+    : null;
+}
+
+function parseExplorationFields(raw: Record<string, unknown>): Pick<ReportFilters, "interval" | "comparison" | "currency"> | null {
+  const interval = oneOf(raw.interval, REPORT_INTERVALS);
+  const comparison = oneOf(raw.comparison, REPORT_COMPARISONS);
+  const currency = reportCurrency(raw.currency);
+  if ((raw.interval !== undefined && !interval) ||
+      (raw.comparison !== undefined && !comparison) ||
+      (raw.currency !== undefined && !currency)) return null;
+  return {
+    ...(interval && { interval }),
+    ...(comparison && { comparison }),
+    ...(currency && { currency }),
+  };
+}
+
 export function parseReportFilters(input: unknown): ReportFilters | null {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     return null;
@@ -494,6 +523,8 @@ export function parseReportFilters(input: unknown): ReportFilters | null {
 
   const sortFields = parseSortFields(raw);
   if (!sortFields) return null;
+  const explorationFields = parseExplorationFields(raw);
+  if (!explorationFields) return null;
 
   return {
     version: REPORT_FILTERS_VERSION,
@@ -509,6 +540,7 @@ export function parseReportFilters(input: unknown): ReportFilters | null {
     excludePending: raw.excludePending,
     sort: sortFields.sort,
     direction: sortFields.direction,
+    ...explorationFields,
   };
 }
 
@@ -597,6 +629,9 @@ export function reportFiltersToSearchParams(
   if (filters.scope) params.set("scope", filters.scope);
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.direction) params.set("dir", filters.direction);
+  if (filters.interval) params.set("interval", filters.interval);
+  if (filters.comparison) params.set("comparison", filters.comparison);
+  if (filters.currency) params.set("currency", filters.currency);
   for (const account of filters.accounts) params.append("account", account);
   for (const merchant of filters.merchants) params.append("merchant", merchant);
   for (const category of filters.categories) params.append("category", category);
@@ -627,6 +662,9 @@ export function reportFiltersFromSearchParams(
   const end = firstSearchParam(params.end);
   const validStart = isIsoDate(start) ? start : fallback.start;
   const validEnd = isIsoDate(end) ? end : fallback.end;
+  const interval = oneOf(firstSearchParam(params.interval), REPORT_INTERVALS) ?? fallback.interval;
+  const comparison = oneOf(firstSearchParam(params.comparison), REPORT_COMPARISONS) ?? fallback.comparison;
+  const currency = reportCurrency(firstSearchParam(params.currency)) ?? fallback.currency;
 
   return {
     version: REPORT_FILTERS_VERSION,
@@ -647,6 +685,9 @@ export function reportFiltersFromSearchParams(
     direction:
       oneOf(firstSearchParam(params.dir), REPORT_DIRECTIONS) ??
       fallback.direction,
+    ...(interval && { interval }),
+    ...(comparison && { comparison }),
+    ...(currency && { currency }),
   };
 }
 

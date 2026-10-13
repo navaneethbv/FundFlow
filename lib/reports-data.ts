@@ -3,6 +3,7 @@ import type { CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 import {
   parseFinancialScope,
+  scopeQueryUserId,
   type FinancialScope,
 } from "@/lib/financial-scope";
 import {
@@ -10,6 +11,9 @@ import {
   endExclusiveFor,
   type ReportFilters,
 } from "@/lib/reports";
+import { chunkValues } from "@/lib/postgrest-limits";
+
+const ACCOUNT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The one place the Reports surface turns a filter into rows. The page and
@@ -26,6 +30,9 @@ import {
 export interface ReportDataResult {
   transactions: CanonicalFinanceTransaction[];
   currencyByAccountId: Map<string, string>;
+  /** Same bounded period before dimension filters, for recoverable selectors. */
+  facetTransactions?: CanonicalFinanceTransaction[];
+  accountNames?: Map<string, string>;
   /** True when the bounded read cut the range short. */
   truncated: boolean;
 }
@@ -34,7 +41,7 @@ export async function loadReportData(
   supabase: SupabaseClient,
   options: Readonly<{ scope: FinancialScope; filters: ReportFilters }>,
 ): Promise<ReportDataResult> {
-  const { transactions, currencyByAccountId, truncated } =
+  const { transactions, currencyByAccountId, accountNames, truncated } =
     await loadCanonicalProjection(supabase, {
       scope: options.scope,
       window: {
@@ -44,11 +51,38 @@ export async function loadReportData(
       excludePending: options.filters.excludePending,
     });
 
+  // Resolve labels separately from currency and rule projection. Include saved
+  // selections even when this period has no rows for that manual account.
+  const names = new Map(accountNames);
+  const manualIds = new Set([
+    ...transactions.flatMap(row => row.manualAccountId ? [row.manualAccountId] : []),
+    ...options.filters.accounts.filter(id => !names.has(id) && ACCOUNT_UUID.test(id)),
+  ]);
+  for (const ids of chunkValues([...manualIds])) {
+    let query = supabase.from("manual_accounts")
+      .select("id, name", { count: "exact" })
+      .in("id", ids)
+      .order("id")
+      .limit(ids.length);
+    const userId = scopeQueryUserId(options.scope);
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error, count } = await query;
+    if (error) throw error;
+    if (!Array.isArray(data) || count !== data.length) {
+      throw new Error("Incomplete report account labels");
+    }
+    for (const row of data) names.set(row.id, row.name);
+  }
+
   return {
     // The window above is a coarse bound; applyReportFilters is what enforces
     // the exact inclusive range plus the account/merchant/category choices.
     transactions: applyReportFilters(transactions, options.filters),
+    facetTransactions: applyReportFilters(transactions, {
+      ...options.filters, accounts: [], merchants: [], categories: [],
+    }),
     currencyByAccountId,
+    accountNames: names,
     truncated,
   };
 }

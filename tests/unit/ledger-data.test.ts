@@ -246,3 +246,12 @@ describe("ledgerZebraBands", () => {
     expect(ledgerZebraBands([], true)).toEqual([]);
   });
 });
+
+describe("bounded ledger scans", () => {
+  it("rejects a scope over its cap instead of returning partial matches", async () => {
+    await expect(collectLedgerChunks(async (from) => ({ rows: from < 4 ? [1, 2] : [], error: null }), 2, 3)).rejects.toThrow("ledger_scope_too_large");
+  });
+  it("rejects a short database page with a larger exact count", async () => {
+    await expect(collectLedgerChunks(async () => ({ rows: [1], error: null, count: 2 }), 1000)).rejects.toThrow("ledger_incomplete_page");
+  });
+});

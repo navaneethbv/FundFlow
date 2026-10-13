@@ -22,7 +22,7 @@ function fakeSupabase(resultFor: (table: string, select: string, calls: Call[]) 
       queries.push(query);
       const resolve = () => {
         const result = resultFor(table, query.select, query.calls);
-        return { data: result.data === undefined ? [] : result.data, error: result.error ?? null, count: result.count ?? null };
+        return { data: result.data === undefined ? [] : result.data, error: result.error ?? null, count: result.count ?? (["transaction_annotations", "receipts", "transaction_splits"].includes(table) ? (result.data ?? []).length : null) };
       };
       const builder: Record<string, unknown> = {};
       for (const method of ["eq", "in", "or", "gte", "lte", "lt", "gt", "order", "range"]) {
@@ -281,5 +281,54 @@ describe("loadLedgerRows", () => {
     const result = await loadLedgerRows(input({ supabase: client, params: { view: "calendar" } }));
     expect(result.rows).toEqual([]);
     expect(result.ledgerError).toMatch(/couldn't load your transactions/);
+  });
+});
+
+describe("ledger metadata before pagination", () => {
+  it("finds literal note and effective tag matches after the first page, before count and calendar", async () => {
+    const source = Array.from({ length: 101 }, (_, i) => row(`t${String(i).padStart(3, "0")}`, "2026-01-02", { source: "import" }));
+    const { client, queries } = fakeSupabase((table) => {
+      if (table === "transactions") return { data: source };
+      if (table === "transaction_annotations") return { data: [{ transaction_id: "t100", note: "Invoice 50%_PAID", tags: ["work"], cleared_at: "2026-01-03" }] };
+      if (table === "receipts" || table === "transaction_splits") return { data: [{ id: "meta", transaction_id: "t100" }] };
+      return { data: [] };
+    });
+    const result = await loadLedgerRows(input({ supabase: client, params: { note: "50%_paid", tag: "work", cleared: "cleared", receipt: "attached", split: "split", view: "calendar" }, filters: { transactionsParityEnabled: true } }));
+    expect(result.rows.map(r => r.id)).toEqual(["t100"]);
+    expect(result.total).toBe(1);
+    expect(result.allRowsForGrouping?.map(r => r.id)).toEqual(["t100"]);
+    expect(result.projectedScope.map(r => r.id)).toEqual(["t100"]);
+    expect(queries.every(q => has(q.calls, "eq", "user_id", "user-1"))).toBe(true);
+    for (const q of queries.filter(q => q.table !== "transactions")) {
+      expect(q.calls.some(c => c.method === "in" && c.args[0] === "transaction_id")).toBe(true);
+    }
+  });
+
+  it("treats absent annotations/receipts/splits as uncleared, untagged, missing and unsplit", async () => {
+    const { client } = fakeSupabase(table => ({ data: table === "transactions" ? [row("t1", "2026-01-01"), row("t2", "2026-01-02")] : [] }));
+    const result = await loadLedgerRows(input({ supabase: client, params: { tagState: "untagged", cleared: "uncleared", receipt: "missing", split: "unsplit" }, filters: { transactionsParityEnabled: true } }));
+    expect(result.total).toBe(2);
+    expect(result.rows.map(r => r.id)).toEqual(["t2", "t1"]);
+  });
+
+  it.each(["transaction_annotations", "receipts", "transaction_splits"])("fails closed when %s cannot establish negative matches", async table => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { client } = fakeSupabase(name => name === table ? { error: { message: "timeout" } } : { data: name === "transactions" ? [row("t1", "2026-01-01")] : [] });
+    const result = await loadLedgerRows(input({ supabase: client, params: { tagState: "untagged", receipt: "missing", split: "unsplit" }, filters: { transactionsParityEnabled: true } }));
+    expect(result.rows).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.ledgerError).toBeTruthy();
+  });
+
+  it("filters calendar rows by category before returning its scope", async () => {
+    const { client } = fakeSupabase(() => ({ data: [row("t1", "2026-01-01"), row("t2", "2026-01-02", { pfc_primary: "TRAVEL" })] }));
+    const result = await loadLedgerRows(input({ supabase: client, params: { view: "calendar", category: "TRAVEL" } }));
+    expect(result.projectedScope.map(r => r.id)).toEqual(["t2"]);
+  });
+
+  it("applies source in owner-scoped database queries before pagination", async () => {
+    const { client, queries } = fakeSupabase(() => ({ data: [] }));
+    await loadLedgerRows(input({ supabase: client, params: { source: "manual" }, filters: { transactionsParityEnabled: true, source: "manual" } }));
+    expect(queries.every(q => has(q.calls, "eq", "source", "manual"))).toBe(true);
   });
 });

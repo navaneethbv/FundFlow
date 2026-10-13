@@ -6,12 +6,14 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import PopoverBackdrop from "@/components/ui/PopoverBackdrop";
 import Select from "@/components/ui/Select";
+import LedgerMetadataControls from "@/components/transactions/LedgerMetadataControls";
 import { Calendar, ChevronDown, Search, X } from "@/components/ui/icons";
 import { formatMonth, titleCase } from "@/lib/format";
 import {
   hasActiveLedgerFilters,
   CLEAR_LEDGER_FILTERS,
   normalizeLedgerAmount,
+  ledgerDateRangeError,
   ledgerHref,
   type LedgerFilters,
   type LedgerQueryEntry,
@@ -36,11 +38,13 @@ function filterCount(filters: LedgerFilters): number {
     filters.minAmount,
     filters.maxAmount,
     filters.status,
+    filters.tag, filters.tagState, filters.note, filters.cleared, filters.source, filters.receipt, filters.split,
   ].filter(Boolean).length;
 }
 
 function dateFilterChips(committed: LedgerFilters): FilterChip[] {
   return [
+    (committed.start || committed.end) && { key: "start", label: `${committed.start || "Start"} to ${committed.end || "End"}`, removeLabel: "Remove custom date range filter" },
     committed.month && {
       key: "month",
       label: formatMonth(committed.month),
@@ -59,6 +63,18 @@ function amountAndStatusChips(committed: LedgerFilters): FilterChip[] {
   ].filter((chip): chip is FilterChip => Boolean(chip));
 }
 
+function metadataChips(committed: LedgerFilters): FilterChip[] {
+  return [
+    committed.tag && { key: "tag", label: `Tag: ${committed.tag}`, removeLabel: "Remove tag filter" },
+    committed.tagState && { key: "tagState", label: titleCase(committed.tagState), removeLabel: "Remove tag status filter" },
+    committed.note && { key: "note", label: `Note: ${committed.note}`, removeLabel: "Remove note filter" },
+    committed.cleared && { key: "cleared", label: titleCase(committed.cleared), removeLabel: "Remove cleared status filter" },
+    committed.source && { key: "source", label: committed.source === "plaid" ? "Bank synced" : titleCase(committed.source), removeLabel: "Remove source filter" },
+    committed.receipt && { key: "receipt", label: `Receipt: ${committed.receipt}`, removeLabel: "Remove receipt filter" },
+    committed.split && { key: "split", label: titleCase(committed.split), removeLabel: "Remove split filter" },
+  ].filter((chip): chip is FilterChip => Boolean(chip));
+}
+
 function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
   const accountLabel = options.accounts.find((option) => option.value === committed.accountId)?.label;
   const subLabel = committed.sub
@@ -70,6 +86,7 @@ function filterChips(committed: LedgerFilters, options: LedgerFilterOptions) {
     committed.q && { key: "q", label: `Search: ${committed.q}`, removeLabel: `Remove search filter ${committed.q}` },
     ...dateFilterChips(committed),
     ...amountAndStatusChips(committed),
+    ...metadataChips(committed),
     committed.accountId && {
       key: "accountId",
       label: accountLabel ?? "Account",
@@ -139,12 +156,16 @@ export default function TransactionQueryControls({
   entries,
   options,
   reviewEnabled = false,
+  parityEnabled = false,
+  detailsEnabled = false,
   needsReviewGlobalCount,
 }: Readonly<{
   committed: LedgerFilters;
   entries: LedgerQueryEntry[];
   options: LedgerFilterOptions;
   reviewEnabled?: boolean;
+  parityEnabled?: boolean;
+  detailsEnabled?: boolean;
   needsReviewGlobalCount?: number | null;
 }>) {
   const router = useRouter();
@@ -153,6 +174,8 @@ export default function TransactionQueryControls({
   const [open, setOpen] = useState<OpenPanel>(null);
   const [search, setSearch] = useState(committed.q);
   const [monthDraft, setMonthDraft] = useState(committed.month);
+  const [rangeDraft, setRangeDraft] = useState({ start: committed.start ?? "", end: committed.end ?? "" });
+  const [dateError, setDateError] = useState("");
   const [filterDraft, setFilterDraft] = useState(committed);
   const [filterError, setFilterError] = useState<string | null>(null);
   const dateTriggerRef = useRef<HTMLButtonElement>(null);
@@ -191,6 +214,8 @@ export default function TransactionQueryControls({
 
   function openDate() {
     setMonthDraft(committed.month);
+    setRangeDraft({ start: committed.start ?? "", end: committed.end ?? "" });
+    setDateError(ledgerDateRangeError(committed.start ?? "", committed.end ?? ""));
     setOpen((current) => (current === "date" ? null : "date"));
   }
 
@@ -222,6 +247,10 @@ export default function TransactionQueryControls({
         minAmount: min,
         maxAmount: max,
         status: filterDraft.status,
+        tag: filterDraft.tag, tagState: filterDraft.tagState, note: filterDraft.note,
+        cleared: detailsEnabled ? filterDraft.cleared : null,
+        source: parityEnabled ? filterDraft.source : null,
+        receipt: parityEnabled ? filterDraft.receipt : null, split: filterDraft.split,
       },
       "filters",
     );
@@ -237,6 +266,7 @@ export default function TransactionQueryControls({
   function removeChip(key: keyof LedgerFilters) {
     const patch: LedgerQueryPatch = { [key]: null };
     if (key === "category") patch.sub = null;
+    if (key === "start") patch.end = null;
     navigate(patch, `remove-${key}`);
   }
 
@@ -282,20 +312,31 @@ export default function TransactionQueryControls({
             className={triggerClasses}
           >
             <Calendar aria-hidden className="h-4 w-4" />
-            {committed.month ? `Date: ${formatMonth(committed.month)}` : "Date"}
+            {committed.start || committed.end ? "Date: Custom range" : committed.month ? `Date: ${formatMonth(committed.month)}` : "Date"}
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
           {open === "date" && (
-            <dialog open ref={datePanelRef} aria-label="Date filter" className="fixed inset-x-4 top-[15vh] z-40 m-0 w-auto space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72">
+            <dialog open ref={datePanelRef} aria-label="Date filter" className="fixed inset-x-4 top-[15vh] z-40 m-0 max-h-[70vh] overflow-y-auto w-auto space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72">
               <label className="block text-xs font-semibold text-muted">
                 Month
-                <Input aria-label="Month" type="month" value={monthDraft} onChange={(event) => setMonthDraft(event.target.value)} className="mt-1" />
+                <Input aria-label="Month" type="month" value={monthDraft} onChange={(event) => { setMonthDraft(event.target.value); setRangeDraft({ start: "", end: "" }); }} className="mt-1" />
               </label>
-              <div className="flex justify-end gap-2">
+              <p className="text-xs text-muted">Choose a month or an inclusive date range.</p>
+              <label className="block text-xs font-semibold text-muted">Start date
+                <Input aria-label="Start date" type="date" value={rangeDraft.start} onChange={event => { setMonthDraft(""); setRangeDraft(value => ({ ...value, start: event.target.value })); }} className="mt-1" />
+              </label>
+              <label className="block text-xs font-semibold text-muted">End date
+                <Input aria-label="End date" type="date" value={rangeDraft.end} onChange={event => { setMonthDraft(""); setRangeDraft(value => ({ ...value, end: event.target.value })); }} className="mt-1" />
+              </label>
+              {dateError && <p role="alert" className="text-sm text-danger">{dateError}</p>}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" onClick={() => { navigate({ month: null, day: null, year: null, start: null, end: null }, "date"); setOpen(null); }}>Clear dates</Button>
                 <Button variant="ghost" onClick={() => close("date")}>Cancel</Button>
                 <Button
                   onClick={() => {
-                    navigate({ month: monthDraft, day: null, year: null }, "date");
+                    const error = ledgerDateRangeError(rangeDraft.start, rangeDraft.end);
+                    if (error) { setDateError(error); return; }
+                    navigate({ month: monthDraft, day: null, year: null, start: rangeDraft.start, end: rangeDraft.end }, "date");
                     setOpen(null);
                   }}
                   loading={isPending && pendingAction === "date"}
@@ -323,6 +364,7 @@ export default function TransactionQueryControls({
           {open === "filters" && (
             <dialog open ref={filtersPanelRef} aria-label="Transaction filters" className="fixed inset-x-4 top-[15vh] z-40 m-0 max-h-[70vh] w-auto space-y-4 overflow-y-auto rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96">
               <div className="grid gap-3 sm:grid-cols-2">
+                <LedgerMetadataControls draft={filterDraft} update={patch => setFilterDraft(value => ({ ...value, ...patch }))} parityEnabled={parityEnabled} detailsEnabled={detailsEnabled} />
                 <label className="text-xs font-semibold text-muted">
                   Account
                   <Select aria-label="Account" value={filterDraft.accountId} onChange={(event) => setFilterDraft((value) => ({ ...value, accountId: event.target.value }))} className="mt-1">
@@ -404,9 +446,9 @@ export default function TransactionQueryControls({
               aria-label={chip.removeLabel}
               disabled={isPending}
               onClick={() => removeChip(chip.key)}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-panel-border bg-panel-2 px-3 text-xs font-semibold text-foreground hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50"
+              className="inline-flex min-h-11 max-w-full items-center gap-1.5 break-words rounded-full border border-panel-border bg-panel-2 px-3 text-xs font-semibold text-foreground hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50"
             >
-              {chip.label}
+              <span className="min-w-0 break-all">{chip.label}</span>
               <X aria-hidden className="h-3.5 w-3.5" />
             </button>
           ))}

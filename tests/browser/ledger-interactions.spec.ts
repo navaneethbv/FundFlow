@@ -40,7 +40,7 @@ test.beforeAll(async () => {
             const search = useSyncExternalStore(callback => { window.addEventListener("popstate", callback); return () => window.removeEventListener("popstate", callback); }, () => location.search);
             const state = parseLedgerQuery(Object.fromEntries(new URLSearchParams(search)));
             return h("main", { style: { padding: 16 } }, h("h1", {}, "Transaction filters"),
-              h(TransactionQueryControls, { key: search, committed: state, entries: ledgerQueryEntries(state), options: { accounts: [], categories: [], subcategoriesByCategory: {}, merchants: [] } }),
+              h(TransactionQueryControls, { key: search, committed: state, entries: ledgerQueryEntries(state), parityEnabled: true, detailsEnabled: true, options: { accounts: [], categories: [], subcategoriesByCategory: {}, merchants: [] } }),
               h(TableToolbar, { bulkTagBar: null, sortMenu: h(TransactionSortMenu, { field: state.sort, direction: state.direction, entries: ledgerQueryEntries(state) }) })
             );
           }
@@ -225,3 +225,42 @@ test("manual holding network failure preserves the accessible draft for retry", 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(failures).toEqual([]);
 });
+
+
+for (const width of [375, 1440]) {
+  test(`custom range and metadata filters round trip at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("http://fundflow.test/**", route => route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en"><head><title>Transaction filters</title><style>${css}</style></head><body><div id="root"></div><script>window.filtersFixture=true</script></body></html>` }));
+    await page.goto("http://fundflow.test/transactions?sort=amount&day=2024-02-01&page=3");
+    await page.addScriptTag({ content: script });
+    await page.getByRole("button", { name: "Date", exact: true }).click();
+    await page.getByLabel("Start date", { exact: true }).fill("2024-03-01");
+    await page.getByLabel("End date", { exact: true }).fill("2024-02-29");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveText("Start date cannot be after end date.");
+    await page.getByLabel("Start date", { exact: true }).fill("2024-02-29");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    expect(new URL(page.url()).searchParams.get("start")).toBe("2024-02-29");
+    expect(new URL(page.url()).searchParams.has("day")).toBe(false);
+    expect(new URL(page.url()).searchParams.has("page")).toBe(false);
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await page.getByLabel("Tag (exact)", { exact: true }).fill("work");
+    await page.getByLabel("Tag status", { exact: true }).selectOption("tagged");
+    await page.getByLabel("Note contains", { exact: true }).fill("50%_paid");
+    await page.getByLabel("Cleared status", { exact: true }).selectOption("uncleared");
+    await page.getByLabel("Transaction source", { exact: true }).selectOption("import");
+    await page.getByLabel("Receipt", { exact: true }).selectOption("missing");
+    await page.getByLabel("Split", { exact: true }).selectOption("split");
+    expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    expect(new URL(page.url()).searchParams.get("note")).toBe("50%_paid");
+    await expect(page.getByRole("button", { name: "Remove receipt filter" })).toBeVisible();
+    await page.getByRole("button", { name: "Remove receipt filter" }).click();
+    expect(new URL(page.url()).searchParams.has("receipt")).toBe(false);
+    await page.goBack();
+    await expect(page.getByRole("button", { name: "Remove receipt filter" })).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+    await expect(page).toHaveURL("http://fundflow.test/transactions?sort=amount");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
