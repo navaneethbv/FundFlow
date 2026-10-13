@@ -36,7 +36,7 @@ export function spendingPace(actual: number, context: {month: string; today?: st
   return Number.isSafeInteger(Math.round(result*100)) ? result : null;
 }
 
-export function editableExpense(line: BudgetLine): boolean {
+export function editableExpense(line: BudgetLine): line is BudgetLine & { budgetId: string } {
   return line.group !== 'income' && line.budgeted && !!line.budgetId;
 }
 

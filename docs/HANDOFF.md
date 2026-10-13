@@ -1,5 +1,9 @@
 # FundFlow Session Handoff
 
+## 2026-10-13: Planning PR quality follow-up
+
+PR #226 replaces non-null assertions with narrowed/checked values and splits decimal validation into whole/fraction checks. The Sonar follow-up adds explicit alphabetical currency comparison, stable schedule/ladder keys, unambiguous input labels, and clearer test/error conventions. Focused validation passes 74 unit tests, six mobile/desktop browser tests, lint, and typecheck. The preceding full-suite results below remain the baseline; hosted checks validate the updated commit.
+
 ## 2026-10-13: Budget, goal, and debt planning
 
 Branch `feat/budget-goal-debt-planning` is stacked on PR #225, whose isolated quality follow-up is `f644998`. The [15-feature contract](superpowers/specs/2026-10-13-budget-goal-debt-planning.md) covers budget search/attention/sorting/pace/transfer preview, savings cadence/lump sum/pauses/milestones/deadline funding, and debt lump sums/assumptions/target payments/monthly schedule/payment ladder. See [architecture](ARCHITECTURE.md#budget-savings-and-debt-scenarios) for calculation and currency boundaries.

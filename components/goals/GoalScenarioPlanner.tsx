@@ -40,7 +40,7 @@ function GoalForm({ goal, today }: Readonly<{ goal: ScenarioGoal; today: string 
   try {
     if ([contribution, lumpSum, skip].some(value => !value.trim())) throw new Error("Enter a value in each amount and skipped-contributions field.");
     result = calculateGoalScenario({ targetAmount: goal.targetAmount, fundedAmount: goal.fundedAmount, contributionAmount: Number(contribution), lumpSum: Number(lumpSum), cadence, skipPayments: Number(skip), today, deadline: deadline || null });
-  } catch (caught) { error = caught instanceof Error ? caught.message : "Check your scenario inputs."; }
+  } catch (error_) { error = error_ instanceof Error ? error_.message : "Check your scenario inputs."; }
   const reset = () => { setContribution("0"); setLumpSum("0"); setSkip("0"); setCadence("monthly"); setDeadline(goal.targetDate ?? ""); };
   const amountFields = [
     { key: "contribution", label: "Contribution amount (USD)", value: contribution, set: setContribution, max: GOAL_SCENARIO_MAX_AMOUNT, step: "0.01" },
@@ -89,11 +89,12 @@ function deadlineMessage(status: string) {
 function DeadlineResult({ result, cadence }: Readonly<{ result: ScenarioResult["deadline"]; cadence: GoalCadence }>) {
   if (!result) return <p className="text-muted">Choose a deadline to calculate the required contribution.</p>;
   if (result.status !== "available") return <p>{deadlineMessage(result.status)}</p>;
+  if (result.requiredAmount === null || result.gapAmount === null) return <p>Deadline amounts are unavailable.</p>;
   const cadenceLabel = new Map<GoalCadence, string>([["biweekly", "14 days"], ["weekly", "week"], ["monthly", "month"]]).get(cadence);
   return <>
     <p>{result.payments} scheduled contributions within this projection on or before the deadline.</p>
-    <p>Required each {cadenceLabel}: {money(result.requiredAmount!)}</p>
-    <p>{result.gapAmount! > 0 ? "Increase per contribution" : "Amount above required per contribution"}: {money(Math.abs(result.gapAmount!))}</p>
+    <p>Required each {cadenceLabel}: {money(result.requiredAmount)}</p>
+    <p>{result.gapAmount > 0 ? "Increase per contribution" : "Amount above required per contribution"}: {money(Math.abs(result.gapAmount))}</p>
   </>;
 }
 function GoalResults({ result, cadence }: Readonly<{ result: ScenarioResult; cadence: GoalCadence }>) {

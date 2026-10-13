@@ -68,5 +68,5 @@ export function solveDebtExtra(input: DebtScenarioInput, targetMonths: number, m
 }
 export function debtPaymentLadder(input: DebtScenarioInput) {
     validate(input);
-    return [0, 25, 50, 100, 250].map(increment => { const extraMonthly = Math.min(MAX_DEBT_MONEY, cents(input.extraMonthly + increment)); return { extraMonthly, plan: buildDebtScenario({ ...input, extraMonthly }).plan }; });
+    return [0, 25, 50, 100, 250].map(increment => { const extraMonthly = Math.min(MAX_DEBT_MONEY, cents(input.extraMonthly + increment)); return { increment, extraMonthly, plan: buildDebtScenario({ ...input, extraMonthly }).plan }; });
 }

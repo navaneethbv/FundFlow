@@ -75,7 +75,7 @@ for (const width of [375, 1440]) {
     await page.screenshot({ path: testInfo.outputPath(`goals-${width}.png`), fullPage: true });
     await page.evaluate(() => { document.documentElement.dataset.privacy = "blur"; });
     expect(await page.locator("[data-money]").evaluateAll(nodes => nodes.every(node => getComputedStyle(node).filter.includes("blur")))).toBe(true);
-    expect(await page.locator('input[type="number"]:not([data-money])').count()).toBe(0);
+    await expect(page.locator('input[type="number"]:not([data-money])')).toHaveCount(0);
     expect(page.url()).toBe("http://fundflow.test/goals");
     expect(requests).toEqual(["http://fundflow.test/goals"]);
     expect(await page.evaluate(() => localStorage.length)).toBe(0);

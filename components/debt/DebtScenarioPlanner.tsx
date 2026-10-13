@@ -26,7 +26,10 @@ function assumption(debt: DebtPlannerAccount): Assumption {
 }
 
 function numeric(raw: string, maximum: number): number {
-  if (!/^\d+(?:\.\d{1,2})?$/.test(raw) || !Number.isFinite(Number(raw)) || Number(raw) > maximum) {
+  const parts = raw.split(".");
+  const validWhole = /^\d+$/.test(parts[0]);
+  const validFraction = parts.length === 1 || (parts.length === 2 && /^\d{1,2}$/.test(parts[1]));
+  if (!validWhole || !validFraction || !Number.isFinite(Number(raw)) || Number(raw) > maximum) {
     throw new Error('Enter nonnegative numbers with at most two decimals within the displayed limits.');
   }
   return Number(raw);
@@ -80,10 +83,10 @@ function AccountAssumptions({ debts, draft, onEdit }: Readonly<{
         Minimum is an estimate until you enter your own assumption. Blank APR excludes the account.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">APR (%)
+        <label className="grid gap-1 text-sm"><span>APR (%)</span>
           <input aria-label={`${debt.name} APR ${debt.id}`} className={fieldClass} inputMode="decimal" value={values.apr} onChange={event => { onEdit(debt.id, { ...values, apr: event.target.value }); }} />
         </label>
-        <label className="grid gap-1 text-sm">Monthly minimum assumption
+        <label className="grid gap-1 text-sm"><span>Monthly minimum assumption</span>
           <input aria-label={`${debt.name} minimum ${debt.id}`} className={fieldClass} inputMode="decimal" value={values.minimum} onChange={event => { onEdit(debt.id, { ...values, minimum: event.target.value }); }} />
         </label>
       </div>
@@ -102,7 +105,7 @@ function CombinedSchedule({ plan, currency }: Readonly<{ plan: ScheduledPayoffPl
         <thead><tr>{['Month', 'Opening balance', 'Interest', 'Payment', 'Closing balance'].map(title => <th key={title} className="p-2">{title}</th>)}</tr></thead>
         <tbody>{plan.schedule.map(row => <tr key={row.month}>
           <th className="p-2">{row.month}</th>
-          {[row.openingBalance, row.interest, row.payment, row.closingBalance].map((value, index) => <td data-money key={index} className="p-2">{formatCurrency(value, currency)}</td>)}
+          {Object.entries({ opening: row.openingBalance, interest: row.interest, payment: row.payment, closing: row.closingBalance }).map(([key, value]) => <td data-money key={key} className="p-2">{formatCurrency(value, currency)}</td>)}
         </tr>)}</tbody>
       </table>
     </ScrollableRegion>}
@@ -125,7 +128,7 @@ function Results({ result, currency }: Readonly<{ result: Result; currency: stri
     </dl>
     <h3 className="mt-5 font-semibold">Extra-payment ladder</h3>
     <p className="text-xs text-muted">Same lump sum and account assumptions; total extra above minimums.</p>
-    <ul className="mt-2 space-y-1 text-sm">{result.ladder.map((row, index) => <li key={index}>
+    <ul className="mt-2 space-y-1 text-sm">{result.ladder.map(row => <li key={row.increment}>
       <span data-money>{money(row.extraMonthly)} extra: {row.plan ? `${row.plan.months} months, ${money(row.plan.totalInterest)} interest` : 'not reached within calculation limits'}</span>
     </li>)}</ul>
     <CombinedSchedule plan={scenario.plan} currency={currency} />

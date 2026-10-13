@@ -94,7 +94,7 @@ export function buildDebtPlannerData(
   requestedCurrency?: string,
 ): DebtPlannerData {
   const eligible = accounts.filter(account => Number.isFinite(account.balance) && account.balance > 0);
-  const availableCurrencies = [...new Set(eligible.map(currencyOf).filter((value): value is string => value !== null))].sort();
+  const availableCurrencies = [...new Set(eligible.map(currencyOf).filter((value): value is string => value !== null))].sort((a, b) => a.localeCompare(b));
   const currency = selectCurrency(availableCurrencies, requestedCurrency);
   const unknownCurrencyCount = eligible.filter(account => currencyOf(account) === null).length;
   accounts = eligible.filter(account => currency !== null && currencyOf(account) === currency);

@@ -47,15 +47,16 @@ function BudgetTransferPreview({data, currency}: Readonly<{data: BudgetPageData;
       {knownCurrency && editable.length < 2 && <p className="mt-2 text-sm">Set up at least two editable expense categories to preview a transfer.</p>}
       {knownCurrency && editable.length >= 2 && <>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <label className="min-w-0 text-sm">Transfer from<Select value={sourceId} onChange={e=>{setSourceId(e.target.value);}}><option value="">Choose category</option>{editable.map(line=><option key={line.budgetId!} value={line.budgetId!}>{line.label}</option>)}</Select></label>
-          <label className="min-w-0 text-sm">Transfer to<Select value={destinationId} onChange={e=>{setDestinationId(e.target.value);}}><option value="">Choose category</option>{editable.map(line=><option key={line.budgetId!} value={line.budgetId!}>{line.label}</option>)}</Select></label>
+          <label className="min-w-0 text-sm">Transfer from<Select value={sourceId} onChange={e=>{setSourceId(e.target.value);}}><option value="">Choose category</option>{editable.map(line=><option key={line.budgetId} value={line.budgetId}>{line.label}</option>)}</Select></label>
+          <label className="min-w-0 text-sm">Transfer to<Select value={destinationId} onChange={e=>{setDestinationId(e.target.value);}}><option value="">Choose category</option>{editable.map(line=><option key={line.budgetId} value={line.budgetId}>{line.label}</option>)}</Select></label>
           <label className="min-w-0 text-sm">Transfer amount<Input data-money type="number" min="0.01" step="0.01" value={amount} aria-invalid={transfer?.ok === false} onChange={e=>{setAmount(e.target.value);}} /></label>
         </div>
         <div aria-live="polite" className="mt-3 text-sm">
           {transfer?.ok === false && <p role="alert">{transfer.error}</p>}
           {transfer?.ok && <>
             {[transfer.source,transfer.destination].map(after=>{
-              const before = lines.find(line=>line.budgetId === after.budgetId)!;
+              const before = lines.find(line=>line.budgetId === after.budgetId);
+              if (!before) return null;
               return <p key={after.budgetId} className="mt-2"><strong>{after.label}</strong>: planned <span data-money>{formatCurrency(before.planned,currency)} → {formatCurrency(after.planned,currency)}</span>; remaining <span data-money>{formatCurrency(before.remaining,currency)} → {formatCurrency(after.remaining,currency)}</span>.</p>;
             })}
             <p className="mt-2">Overall planned spending stays <span data-money>{formatCurrency(transfer.totalPlanned,currency)}</span>.</p>
