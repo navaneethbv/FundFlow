@@ -1,4 +1,5 @@
 import { resolveViewerToday } from "@/lib/report-period";
+import "./print.css";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/components/shell/AppShell";
@@ -11,6 +12,10 @@ import ReportRightRail from "@/components/reports/ReportRightRail";
 import ReportSummaryPanel from "@/components/reports/ReportSummaryPanel";
 import ReportTransactions from "@/components/reports/ReportTransactions";
 import SavedReportsSection from "@/components/reports/SavedReportsSection";
+import PrintReportButton from "@/components/reports/PrintReportButton";
+import ReportPrintContext from "@/components/reports/ReportPrintContext";
+import ReportComparison from "@/components/reports/ReportComparison";
+import ReportSpendingHabits from "@/components/reports/ReportSpendingHabits";
 import ExportReportButton from "@/components/review/ExportReportButton";
 import EmptyState from "@/components/ui/EmptyState";
 import Panel from "@/components/ui/Panel";
@@ -19,18 +24,16 @@ import { LineChart } from "@/components/ui/icons";
 import {
   breakdownBy,
   computePeriodCashFlow,
-  partitionCashFlowByCurrency,
 } from "@/lib/cash-flow";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { serializeFinancialScope } from "@/lib/financial-scope";
-import { UNKNOWN_CURRENCY } from "@/lib/format";
+import { getReportComparisonRange } from "@/lib/report-explorer";
+import { buildReportView } from "@/lib/report-view";
 import {
-  applyReportSort,
   buildCashFlowSankeyData,
   defaultReportFilters,
   reportFiltersFromSearchParams,
   reportFiltersToSearchParams,
-  summarizeTransactions,
   type ReportFilters,
   type ReportTab,
 } from "@/lib/reports";
@@ -114,39 +117,27 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
     user.id,
     params.scope,
   );
-  const anchorMonth = (await resolveViewerToday(supabase, user.id)).slice(0, 7);
-  const filters: ReportFilters = {
+  const today = await resolveViewerToday(supabase, user.id);
+  const anchorMonth = today.slice(0, 7);
+  const requestedFilters: ReportFilters = {
     ...reportFiltersFromSearchParams(params, defaultReportFilters(anchorMonth)),
     scope: serializeFinancialScope(scope) ?? null,
   };
 
-  const [loaded, savedReports] = await Promise.all([
-    loadReportData(supabase, { scope, filters }),
+  const comparisonRange = getReportComparisonRange(requestedFilters);
+  const [loaded, savedReports, reference] = await Promise.all([
+    loadReportData(supabase, { scope, filters: requestedFilters }),
     loadSavedReports(supabase, user.id),
+    comparisonRange
+      ? loadReportData(supabase, { scope, filters: { ...requestedFilters, ...comparisonRange } })
+      : Promise.resolve(null),
   ]);
 
-  const byCurrency = partitionCashFlowByCurrency(
-    loaded.transactions,
-    loaded.currencyByAccountId,
-  );
-  const currencies = [...byCurrency.keys()];
-  const requestedCurrency = firstSearchParam(params.currency);
-  const selectedCurrency =
-    requestedCurrency && byCurrency.has(requestedCurrency)
-      ? requestedCurrency
-      : currencies[0];
-  const rows = selectedCurrency ? (byCurrency.get(selectedCurrency) ?? []) : [];
-  const currencyLabel = selectedCurrency ?? UNKNOWN_CURRENCY;
-
-  // Row order is a view property, not a data one: the summary, sankey, and
-  // periods are computed from the filtered set and must not change when only
-  // the sort changes. Sorting happens here, after projection and filtering and
-  // before pagination, so the table's page boundaries never overlap.
-  const orderedRows = applyReportSort(rows, filters);
-
-  const summary = summarizeTransactions(rows);
+  const { selectedCurrency, currencies, rows, orderedRows, summary, periods,
+    facets, comparison, comparisonUnavailable, habits } = buildReportView(loaded, reference, requestedFilters, today);
+  const filters = { ...requestedFilters, currency: selectedCurrency };
+  const currencyLabel = selectedCurrency;
   const sankey = buildCashFlowSankeyData(rows);
-  const periods = computePeriodCashFlow(rows, "monthly");
   const page = parsePage(firstSearchParam(params.page));
 
   const exportParams = reportFiltersToSearchParams(filters);
@@ -159,11 +150,16 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
   };
 
   return (
+    <div className="reports-print-surface">
     <AppShell active="reports" email={user.email}>
       <PageHeader
         title="Reports"
         description="Custom multidimensional analysis across dates, categories, and merchants. For periodic cash flow trends, see Cash Flow."
+        actions={<PrintReportButton />}
       />
+
+      <ReportPrintContext filters={filters} currency={currencyLabel} page={page}
+        total={rows.length} accountNames={loaded.accountNames} />
 
       <Tabs
         items={(Object.keys(TAB_LABELS) as ReportTab[]).map((tab) => ({
@@ -187,7 +183,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
       )}
 
       {currencies.length > 1 && (
-        <Panel tone="accent">
+        <Panel tone="accent" data-report-no-print>
           <p className="text-sm font-semibold">
             Totals are separated by currency because FundFlow does not guess
             exchange rates.
@@ -211,16 +207,22 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
         </Panel>
       )}
 
+      <div data-report-no-print>
       <ReportControls
         filters={filters}
         householdId={visibleHouseholdIds[0]}
+        today={today}
+        facets={facets}
       />
+      </div>
 
-      {loaded.transactions.length === 0 ? (
+      {comparisonUnavailable && <Panel tone="warning"><p className="text-sm">{comparisonUnavailable}</p></Panel>}
+
+      {rows.length === 0 ? (
         <EmptyState
           icon={<LineChart aria-hidden className="h-5 w-5" />}
           title="Nothing in this range"
-          description="Widen the date range, or clear the account, merchant, and category filters."
+          description={`No matching transactions in ${currencyLabel}. Widen the date range, choose a different currency, or clear the account, merchant, and category filters.`}
           action={
             <Link
               href={reportHref(defaultReportFilters(anchorMonth))}
@@ -233,6 +235,11 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
       ) : (
         <>
           <ReportSummaryPanel summary={summary} currency={currencyLabel} />
+
+          {comparison && <ReportComparison comparison={comparison}
+            referenceLabel={filters.comparison === "previous_year" ? "Previous year" : "Previous period"} />}
+
+          {habits && <ReportSpendingHabits habits={habits} />}
 
           <Panel
             eyebrow={filters.mode === "trends" ? "Trends" : filters.dimension}
@@ -257,7 +264,7 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
               title="Transactions in this report"
               className="min-w-0"
               action={
-                <div className="flex flex-wrap gap-2">
+                <div data-report-no-print className="flex flex-wrap gap-2">
                   <ExportReportButton label="Download weekly PDF report" />
                   <Link
                     href="/wrapped"
@@ -285,7 +292,8 @@ export default async function ReportsPage({ searchParams }: Readonly<PageProps>)
         </>
       )}
 
-      <SavedReportsSection reports={savedReports} currentFilters={filters} />
+      <div data-report-no-print><SavedReportsSection reports={savedReports} currentFilters={filters} /></div>
     </AppShell>
+    </div>
   );
 }

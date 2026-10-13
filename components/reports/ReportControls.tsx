@@ -9,6 +9,10 @@ import {
   type ReportTab,
 } from "@/lib/reports";
 import type { BreakdownDimension } from "@/lib/cash-flow";
+import { reportHref, type ReportFacets } from "@/lib/report-explorer";
+import { ReportAnalysisControls, ReportDateShortcuts, ReportHiddenFields, ReportSelectionControls, reportFacetLabel } from "./ReportExplorationControls";
+
+export { reportHref } from "@/lib/report-explorer";
 
 /**
  * Every control here is either a link or a plain GET form, so tab switches,
@@ -47,17 +51,12 @@ const DIRECTION_LABELS: Record<ReportDirection, string> = {
   desc: "Descending",
 };
 
-export function reportHref(
-  filters: ReportFilters,
-  patch: Partial<ReportFilters> = {},
-): string {
-  return `/reports?${reportFiltersToSearchParams({ ...filters, ...patch }).toString()}`;
-}
-
 export default function ReportControls({
   filters,
   householdId,
-}: Readonly<{ filters: ReportFilters; householdId?: string }>) {
+  today,
+  facets,
+}: Readonly<{ filters: ReportFilters; householdId?: string; today?: string; facets?: ReportFacets }>) {
   return (
     <section
       aria-label="Report controls"
@@ -77,30 +76,13 @@ export default function ReportControls({
         </fieldset>
 
         <form
+          key={reportFiltersToSearchParams(filters).toString()}
           method="get"
           action="/reports"
+          aria-label="Report dates"
           className="grid gap-3 sm:grid-cols-[repeat(2,minmax(9rem,1fr))_auto]"
         >
-          <input type="hidden" name="tab" value={filters.tab} />
-          <input type="hidden" name="mode" value={filters.mode} />
-          <input type="hidden" name="dimension" value={filters.dimension} />
-          <input
-            type="hidden"
-            name="pending"
-            value={filters.excludePending ? "exclude" : "include"}
-          />
-          {filters.scope && (
-            <input type="hidden" name="scope" value={filters.scope} />
-          )}
-          {filters.accounts.map((account) => (
-            <input key={account} type="hidden" name="account" value={account} />
-          ))}
-          {filters.merchants.map((merchant) => (
-            <input key={merchant} type="hidden" name="merchant" value={merchant} />
-          ))}
-          {filters.categories.map((category) => (
-            <input key={category} type="hidden" name="category" value={category} />
-          ))}
+          <ReportHiddenFields filters={filters} omit={["start", "end"]} />
 
           <label className="text-sm font-semibold">
             <span className="mb-1 block text-xs text-muted">From</span>
@@ -128,6 +110,10 @@ export default function ReportControls({
           </button>
         </form>
       </div>
+
+      <ReportDateShortcuts filters={filters} today={today} />
+      <ReportAnalysisControls filters={filters} />
+      <ReportSelectionControls filters={filters} facets={facets} />
 
       <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-panel-border pt-4">
         <fieldset>
@@ -231,12 +217,13 @@ export default function ReportControls({
                 } as Partial<ReportFilters>)}
                 className="inline-flex min-h-11 items-center gap-1 rounded-field bg-accent-soft px-3 py-1 text-sm font-semibold text-accent focus-visible:outline-2"
               >
-                <span>{value}</span>
+                <span>{reportFacetLabel(facets?.[key], value)}</span>
                 <span aria-hidden>×</span>
                 <span className="sr-only">Remove this filter</span>
               </Link>
             )),
           )}
+          <Link href={reportHref(filters, { accounts: [], categories: [], merchants: [] })} className="inline-flex min-h-11 items-center rounded-field px-3 py-1 text-sm font-semibold text-accent hover:bg-panel-hover focus-visible:outline-2">Clear selections</Link>
         </div>
       )}
     </section>

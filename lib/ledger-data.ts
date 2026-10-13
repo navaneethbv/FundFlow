@@ -10,12 +10,14 @@ import {
 
 export interface LedgerChunkResult<T> {
   rows: T[];
+  count?: number | null;
   error: { code?: string; message?: string } | null;
 }
 
 export async function collectLedgerChunks<T>(
   load: (from: number, to: number) => Promise<LedgerChunkResult<T>>,
   chunkSize = 1000,
+  maxRows = 20_000,
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += chunkSize) {
@@ -26,7 +28,11 @@ export async function collectLedgerChunks<T>(
       );
     }
     rows.push(...result.rows);
-    if (result.rows.length < chunkSize) return rows;
+    if (rows.length > maxRows || (result.count != null && result.count > maxRows)) throw new Error("ledger_scope_too_large");
+    if (result.rows.length < chunkSize) {
+      if (result.count != null && result.count !== rows.length) throw new Error("ledger_incomplete_page");
+      return rows;
+    }
   }
 }
 

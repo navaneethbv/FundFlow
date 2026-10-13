@@ -34,6 +34,7 @@ import {
   ledgerHref,
   ledgerQueryEntries,
   parseLedgerQuery,
+  resolveLedgerDateBounds,
   savedLedgerViewParams,
   type LedgerRawSearchParams,
   type LedgerQueryState,
@@ -83,15 +84,6 @@ interface PageProps {
   searchParams: Promise<LedgerRawSearchParams>;
 }
 
-function monthBounds(month: string): { start: string; end: string } | null {
-  const m = /^(\d{4})-(\d{2})$/.exec(month);
-  if (!m) return null;
-  const year = Number(m[1]);
-  const monthIdx = Number(m[2]) - 1;
-  const lastDay = new Date(year, monthIdx + 1, 0).getDate();
-  return { start: `${month}-01`, end: `${month}-${String(lastDay).padStart(2, "0")}` };
-}
-
 type TransactionsSupabase = Awaited<ReturnType<typeof createClient>>;
 
 function transactionSetupError(
@@ -113,25 +105,16 @@ export const metadata = {
   title: "Transactions",
 };
 
-function resolveDateBounds(
-  month?: string,
-  year?: string,
-  day?: string,
-): { start: string; end: string } | null {
-  if (day) return { start: day, end: day };
-  if (month) return monthBounds(month);
-  if (year) return { start: `${year}-01-01`, end: `${year}-12-31` };
-  return null;
-}
-
 function describeLedgerPeriod(
   month?: string,
   year?: string,
   day?: string,
   hasBounds?: boolean,
+  customBounds?: { start: string; end: string } | null,
 ): string {
   if (!hasBounds) return "";
   if (day) return ` on ${day}`;
+  if (customBounds) return ` from ${customBounds.start} to ${customBounds.end}`;
   if (month) return ` in ${formatMonth(month)}`;
   if (year) return ` in ${year}`;
   return "";
@@ -236,16 +219,33 @@ function redirectInvalidLedgerPage(state: LedgerQueryState, ledgerError: string,
   redirect(ledgerHref(ledgerQueryEntries(state), { page: totalPages > 1 ? String(totalPages) : null }, { resetPage: false }));
 }
 
+function ledgerBounds(state: LedgerQueryState, calendarMonth: string) {
+  if (state.dateError) return null;
+  return resolveLedgerDateBounds(state, state.view === "calendar" ? calendarMonth : undefined);
+}
+
+function enabledLedgerQuery(params: LedgerRawSearchParams) {
+  const transactionReviewEnabled = isFeatureEnabled("transactionReview");
+  const transactionCalendarEnabled = isFeatureEnabled("transactionCalendar");
+  const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
+  const transactionDetailsEnabled = isFeatureEnabled("transactionDetails");
+  return parseLedgerQuery({
+    ...params,
+    ...(!transactionReviewEnabled ? { review: "all" } : {}),
+    ...(!transactionCalendarEnabled ? { view: "list" } : {}),
+    ...(!transactionsParityEnabled ? { source: "", receipt: "" } : {}),
+    ...(!transactionDetailsEnabled ? { cleared: "" } : {}),
+  });
+}
+
 export default async function TransactionsPage({ searchParams }: Readonly<PageProps>) {
   const params = await searchParams;
   const transactionReviewEnabled = isFeatureEnabled("transactionReview");
   const transactionCalendarEnabled = isFeatureEnabled("transactionCalendar");
   const projectedLedgerEnabled = isFeatureEnabled("projectedLedgerRows");
-  const state = parseLedgerQuery({
-    ...params,
-    ...(!transactionReviewEnabled ? { review: "all" } : {}),
-    ...(!transactionCalendarEnabled ? { view: "list" } : {}),
-  });
+  const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
+  const transactionDetailsEnabled = isFeatureEnabled("transactionDetails");
+  const state = enabledLedgerQuery(params);
   const { month, day, accountId, q, page, flow, accountType } = state;
   const visibleColumns = state.columns;
   const columnsAreDefault = !state.columnsSubmitted;
@@ -253,7 +253,6 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // 20260730240000_manual_transactions_receipts.sql is applied. /transactions
   // is already live, so this must default to the pre-Phase-12 query shape
   // rather than 500ing every visit on an unmigrated deployment.
-  const transactionsParityEnabled = isFeatureEnabled("transactionsParity");
   const plaidCategoryMappingsEnabled = isFeatureEnabled("plaidCategoryMappings");
 
   const supabase = await createClient();
@@ -329,9 +328,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
   // the rule-independent scope and filter on the rules-applied values instead.
   const columns = ledgerColumns(transactionsParityEnabled, transactionReviewEnabled);
   const viewerToday = await resolveViewerToday(supabase, ownerId);
-  const calendarMonth = month || viewerToday.slice(0, 7);
+  const calendarMonth = month || day?.slice(0, 7) || state.start?.slice(0, 7) || viewerToday.slice(0, 7);
   const effectiveMonth = state.view === "calendar" ? calendarMonth : month;
-  const bounds = resolveDateBounds(effectiveMonth, state.year, day);
+  const bounds = ledgerBounds(state, calendarMonth);
   const typedIds = accountType
     ? accounts.filter((account) => account.type === accountType).map((account) => account.id as string)
     : [];
@@ -351,6 +350,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
     minAmount: state.minAmount,
     maxAmount: state.maxAmount,
     status: state.status,
+    source: state.source,
   };
 
   const accountOptionsForFilters = accountOptions.map((account) => ({
@@ -485,6 +485,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             entries={queryEntries}
             options={filterOptions}
             reviewEnabled={transactionReviewEnabled}
+            parityEnabled={transactionsParityEnabled}
+            detailsEnabled={transactionDetailsEnabled}
             needsReviewGlobalCount={needsReviewGlobalCount}
           />
         </Panel>
@@ -499,7 +501,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         {!ledgerError && (
           <p className="text-xs text-muted">
             {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
-            {describeLedgerPeriod(effectiveMonth, state.year, day, Boolean(bounds))}
+            {describeLedgerPeriod(effectiveMonth, state.year, day, Boolean(bounds), state.start ? bounds : null)}
             . Negative amounts represent expenses; positive amounts represent income.
           </p>
         )}
@@ -519,6 +521,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         {transactionCalendarEnabled && state.view === "calendar" && !ledgerError && (
           <TransactionCalendar
             month={calendarMonth}
+            entries={queryEntries}
             rows={(ledgerRows.projectedScope.length > 0 ? ledgerRows.projectedScope : rows).map((row) => ({
               id: row.id,
               date: row.date,

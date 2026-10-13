@@ -1,5 +1,26 @@
 # FundFlow Session Handoff
 
+## 2026-10-13: Transaction and reporting essentials
+
+Branch `feat/transaction-reporting-essentials`, based on main `70adee4`, adds the 15 features in [the acceptance contract](superpowers/specs/2026-10-13-transaction-reporting-essentials.md).
+The ledger adds custom dates, tags/untagged, note search, cleared state, source, receipts, and split filters before sorting, counts, pagination, and calendar grouping.
+Reports add presets, adjacent periods, named selectors, prior-period/prior-year comparisons, category variance, daily/weekly/monthly trends, spending habits, and print/save-to-PDF.
+
+Metadata reads stay owner-scoped, bounded to the shared request-size budget, and fail closed on incomplete results.
+Comparison data uses the same scope and filters, remains currency-separated, and is suppressed when either period is incomplete or lacks that currency.
+Saved reports validate/migrate on read; manual-account labels stay separate from currency/rule projection and remain readable for empty-period selections.
+Printing retains privacy blur, report context, visible warnings, and explicit transaction-page bounds.
+The mobile transaction-table scroll region is keyboard accessible.
+
+Local validation passes 6,389 coverage tests (99.32% lines, 94.99% branches), 6,384 future-clock unit tests, 66 browser tests, lint, typecheck, palette validation, the placeholder-config production build, and a zero-vulnerability dependency audit. Hosted checks are tracked on the PR. Synthetic component browser checks cover mobile/desktop controls, navigation, forms, accessibility, and private printing; live authenticated database/storage acceptance and the OS print dialog remain outside those checks.
+Twenty-two integration test files require disposable service configuration and remain skipped.
+The ordinary Chromium download was corrupt in this environment; the existing browser suite ran using a temporary Chromium binary with no added repository dependency.
+`graphify update .` could not run because the binary is unavailable; no generated graph output is committed.
+
+The required dependency freshness check led to patch updates for the database client, test runner/coverage package, and dotenv.
+Major TypeScript, ESLint, and bank-provider SDK upgrades are deferred for dedicated compatibility work; unrelated platform/minor upgrades remain out of scope.
+No AI behavior, database migration, feature flag, production data, deployment, or merge changed.
+
 ## 2026-10-03: Production acceptance after PRs 220 and 221
 
 PRs #221 and #220 were merged after their 14 hosted checks passed, using the owner's explicit approval to bypass the remaining branch-policy gate.

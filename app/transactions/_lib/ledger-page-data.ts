@@ -1,3 +1,4 @@
+import { filterLedgerMetadata, needsLedgerMetadata } from "@/lib/ledger-metadata";
 import { accountDisplayLabel } from "@/lib/account-label";
 import type { createClient } from "@/lib/supabase/server";
 import { hasRemapRules } from "@/lib/ledger-filter";
@@ -31,6 +32,7 @@ export type LedgerChunkFilters = {
   minAmount?: string;
   maxAmount?: string;
   status?: "" | "pending" | "posted";
+  source?: "" | "plaid" | "import" | "manual";
 };
 
 function buildOwnerScopedLedgerQuery(supabase: TransactionsSupabase, columns: string, filters: LedgerChunkFilters, count: boolean) {
@@ -48,6 +50,7 @@ function applyLedgerMoneyFilters(query: ReturnType<typeof buildOwnerScopedLedger
   if (minimum) query = query.or(`amount.gte.${minimum},amount.lte.-${minimum}`);
   if (maximum) query = query.gte("amount", -Number(maximum)).lte("amount", Number(maximum));
   if (filters.status) query = query.eq("pending", filters.status === "pending");
+  if (filters.transactionsParityEnabled && filters.source) query = query.eq("source", filters.source);
   return query;
 }
 
@@ -106,7 +109,7 @@ function buildLedgerScanQuery(
   columns: string,
   filters: LedgerChunkFilters,
 ) {
-  return buildLedgerFilterQuery(supabase, columns, filters)
+  return buildLedgerFilterQuery(supabase, columns, filters, true)
     .order("date", { ascending: false })
     .order("id", { ascending: true });
 }
@@ -119,7 +122,7 @@ type LedgerRules = Array<{
   enabled: boolean;
 }>;
 
-export async function loadLedgerRows(input: {
+type LoadLedgerRowsInput = {
   supabase: TransactionsSupabase;
   state: ReturnType<typeof parseLedgerQuery>;
   filters: LedgerChunkFilters;
@@ -130,7 +133,9 @@ export async function loadLedgerRows(input: {
   accountOptionsForFilters: { value: string; label: string }[];
   categoryMappings: ReadonlyMap<string, string>;
   ledgerError: string;
-}): Promise<{
+};
+
+export async function loadLedgerRows(input: LoadLedgerRowsInput): Promise<{
   rows: LedgerProjectedRow[];
   total: number;
   projectedScope: LedgerProjectedRow[];
@@ -139,26 +144,17 @@ export async function loadLedgerRows(input: {
   filterOptions: LedgerFilterOptions;
   ledgerError: string;
 }> {
-  const { supabase, state, filters, columns, rules, accountNamesById, accountLabelsById, accountOptionsForFilters } = input;
-  let ledgerError = input.ledgerError;
-  const ruleAwareFilter = Boolean(state.category || state.merchant) && (hasRemapRules(rules) || input.categoryMappings.size > 0);
-  const projectedPath = isFeatureEnabled("compoundRules") || needsProjectedLedgerPage(state.sort, ruleAwareFilter) || state.view === "calendar";
+  const { supabase, state, filters, rules, accountOptionsForFilters } = input;
+  let ledgerError = input.ledgerError || state.dateError;
+  const projectedPath = ledgerUsesProjection(input);
   const needsFullProjection = projectedPath || hasRemapRules(rules);
   let projectedScope: LedgerProjectedRow[] = [];
   let allRowsForGrouping: LedgerProjectedRow[] | null = null;
   let incompleteDates = new Set<string>();
-  if (needsFullProjection) {
-    try {
-      const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
-        const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
-        return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error };
-      });
-      const mappedRows = sourceRows.map((row) => applyPlaidCategoryMapping(row, input.categoryMappings));
-      projectedScope = projectLedgerRows(await attachLedgerRuleActions(supabase, filters.ownerId, mappedRows), rules, accountNamesById, accountLabelsById);
-    } catch (error) {
-      console.error("Transaction projection query failed", error instanceof Error ? error.message : "unknown");
-      ledgerError = "We couldn't load your transactions. Try changing the filters or refresh the page.";
-    }
+  if (needsFullProjection && !ledgerError) {
+    const projection = await loadLedgerProjection(input);
+    projectedScope = projection.rows;
+    ledgerError = projection.error;
   }
   let rows: LedgerProjectedRow[] = [];
   let total = 0;
@@ -182,7 +178,7 @@ export async function loadLedgerRows(input: {
       incompleteDates = result.incompleteDates;
     }
   }
-  const filterOptions = await loadLedgerFilterOptions({
+  const filterOptions = ledgerError ? buildLedgerFilterOptions([], accountOptionsForFilters) : await loadLedgerFilterOptions({
     supabase,
     filters,
     projectedScope,
@@ -192,12 +188,37 @@ export async function loadLedgerRows(input: {
   return {
     rows,
     total,
-    projectedScope,
+    projectedScope: allRowsForGrouping ?? projectedScope,
     allRowsForGrouping,
     incompleteDates,
     filterOptions,
     ledgerError,
   };
+}
+
+function ledgerUsesProjection(input: LoadLedgerRowsInput): boolean {
+  const { state, rules } = input;
+  const ruleAwareFilter = Boolean(state.category || state.merchant) && (hasRemapRules(rules) || input.categoryMappings.size > 0);
+  return needsLedgerMetadata(state) || isFeatureEnabled("compoundRules") || needsProjectedLedgerPage(state.sort, ruleAwareFilter) || state.view === "calendar";
+}
+
+async function loadLedgerProjection(input: LoadLedgerRowsInput): Promise<{ rows: LedgerProjectedRow[]; error: string }> {
+  const { supabase, filters, columns, rules, accountNamesById, accountLabelsById, state } = input;
+  try {
+    const sourceRows = await collectLedgerChunks<LedgerProjectionSourceRow>(async (from, to) => {
+      const result = await buildLedgerScanQuery(supabase, columns, filters).range(from, to);
+      return { rows: (result.data ?? []) as unknown as LedgerProjectionSourceRow[], error: result.error, count: result.count };
+    });
+    const mappedRows = sourceRows.map((row) => applyPlaidCategoryMapping(row, input.categoryMappings));
+    const rows = await filterLedgerMetadata(supabase, filters.ownerId, projectLedgerRows(await attachLedgerRuleActions(supabase, filters.ownerId, mappedRows), rules, accountNamesById, accountLabelsById), state);
+    return { rows, error: "" };
+  } catch (error) {
+    console.error("Transaction projection query failed", error instanceof Error ? error.message : "unknown");
+    const message = error instanceof Error && error.message === "ledger_scope_too_large"
+      ? "Too many transactions or details to filter safely. Choose a narrower date range."
+      : "We couldn't load your transactions. Try changing the filters or refresh the page.";
+    return { rows: [], error: message };
+  }
 }
 
 async function loadDirectLedgerRows(input: {
@@ -299,7 +320,7 @@ async function loadLedgerFilterOptions(input: {
   try {
     const facetRows = await collectLedgerChunks<LedgerFacetSourceRow>(async (from, to) => {
       const result = await buildLedgerScanQuery(input.supabase, "pfc_primary, pfc_detailed, merchant_name, name", input.filters).range(from, to);
-      return { rows: (result.data ?? []) as unknown as LedgerFacetSourceRow[], error: result.error };
+      return { rows: (result.data ?? []) as unknown as LedgerFacetSourceRow[], error: result.error, count: result.count };
     });
     return buildLedgerFilterOptions(facetRows.map(toLedgerFacetRow), input.accountOptionsForFilters);
   } catch (error) {

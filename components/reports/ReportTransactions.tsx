@@ -1,3 +1,4 @@
+import ScrollableRegion from "@/components/ui/ScrollableRegion";
 import { Fragment } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -125,7 +126,8 @@ export default function ReportTransactions({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <ScrollableRegion label="Report transaction table"
+        className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-accent">
         <table className="min-w-[42rem] w-full text-sm">
           <caption className="sr-only">
             {groupByDate
@@ -195,7 +197,7 @@ export default function ReportTransactions({
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollableRegion>
 
       {pageCount > 1 && (
         <nav

@@ -82,6 +82,17 @@ All flags remain off; typed assets require `typedManualAssets`, `assetOwnership`
 
 ## Key modules in `lib/`
 
+- `ledger-query.ts` validates custom date ranges and review metadata filters and preserves them in saved-view URLs.
+  `ledger-metadata.ts` reads annotations, receipt links, and splits in owner-scoped batches, then filters the bounded projected scope before sorting, counts, pagination, and calendar grouping.
+  Incomplete metadata fails closed; negative matches never infer absence from a failed read.
+- `report-explorer.ts` owns calendar-aware report presets, adjacent/reference ranges, and projected filter facets.
+  `reports-data.ts` preserves the unfiltered dimension facets from the same bounded canonical read; no second transaction scan is needed for selectors.
+  Manual-account labels use bounded, scope-aware lookups separate from currency/rule projection, including saved selections with no current-period rows.
+  `report-view.ts` partitions current/reference rows by currency and withholds comparisons on missing currency or truncation.
+  `report-analysis.ts` computes signed category variance and elapsed-day spending habits from canonical flow; future days never count as no-spend days.
+  Optional report comparison, interval, and currency settings round-trip through existing saved-report JSON without a migration.
+  Reports print styles are route-scoped and preserve warnings, context, pagination scope, and privacy blur.
+
 - `request-body.ts` bounds actual incoming bytes before JSON or multipart parsing and returns 413 for oversized envelopes.
   AI questions and active image/CSV uploads use it with endpoint-specific limits documented in the [September 26 review](reviews/2026-09-26-security-ui-memory.md).
 - `dashboard-cache.ts` retains at most 32 scopes per process with least-recently-used eviction and activity-driven expiration.

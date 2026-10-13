@@ -161,6 +161,8 @@ export async function fetchFinanceTransactions(
 export interface CanonicalProjectionResult {
   transactions: import("@/lib/finance-domain").CanonicalFinanceTransaction[];
   currencyByAccountId: Map<string, string>;
+  /** Reuse the already owner-scoped names for report selectors. */
+  accountNames?: Map<string, string>;
   truncated: boolean;
 }
 
@@ -542,6 +544,7 @@ export async function loadCanonicalProjection(
       ),
     }),
     currencyByAccountId,
+    accountNames,
     truncated: fetchResult.truncated,
   };
 }

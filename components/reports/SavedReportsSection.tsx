@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Panel from "@/components/ui/Panel";
 import {
+  parseReportFilters,
   reportFiltersToSearchParams,
   type ReportFilters,
 } from "@/lib/reports";
@@ -32,12 +33,10 @@ export interface SavedReport {
 }
 
 function hrefFor(filters: unknown): string | null {
-  // A row written by an older or newer schema is shown but not loadable, rather
-  // than silently loading a different row set than the user saved.
-  if (typeof filters !== "object" || filters === null) return null;
-  const candidate = filters as Partial<ReportFilters>;
-  if (!candidate.start || !candidate.end || !candidate.tab) return null;
-  return `/reports?${reportFiltersToSearchParams(candidate as ReportFilters).toString()}`;
+  // Migrate supported legacy versions and reject malformed/future payloads
+  // before serializing, so loading cannot silently discard saved settings.
+  const parsed = parseReportFilters(filters);
+  return parsed ? `/reports?${reportFiltersToSearchParams(parsed).toString()}` : null;
 }
 
 export default function SavedReportsSection({
