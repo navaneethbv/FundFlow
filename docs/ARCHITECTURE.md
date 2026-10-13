@@ -9,6 +9,18 @@ the complete module inventory.
 working. This file is the reference behind those rules.
 Read the relevant section here before changing a subsystem it covers.
 
+## Budget, savings, and debt scenarios
+
+`lib/budget-explorer.ts` filters/sorts visible monthly rows without changing section or full-budget totals. `BudgetExplorer` integrates with the existing monthly tables and previews transfers between distinct editable expense envelopes without writes. Pace requires complete, fresh, known-currency data for the viewer's current month; the page passes `resolveViewerToday` explicitly.
+
+`lib/goal-scenarios.ts` models the existing USD save-up goals with integer cents and calendar date keys. Weekly/biweekly dates advance by 7/14 days; monthly dates preserve the original day, clamped to month end. `GoalScenarioPlanner` supports a lump sum, cadence, skipped contributions, milestones, and deadline funding. The horizon is 600 scheduled dates, including up to 120 skipped contributions. Each amount is capped at one billion. Legacy and v2 goals normalize at the server page; goal/source changes reset the scenario.
+
+`lib/debt-scenarios.ts` reuses `buildPayoffSchedule` in `lib/debt.ts` for lump sums, assumption overrides, integer-cent target-payment solving, and a payment ladder. The shared engine preserves the existing payoff-plan return shape, keeps the monthly payment budget after accounts clear, and permits first-month negative amortization when the plan can still clear later. Simulations stop at 600 months or unsafe cent precision. Scenario forms support at most 100 accounts and compute on Apply. Minimums and APRs are disclosed estimates; missing-APR loans remain excluded until supplied.
+
+`lib/debt-data.ts` retains and validates account currency before planning. The selected known currency scopes balances, plans, account details, and scenario input; unknown currencies are disclosed and excluded. No exchange rate conversion is implied.
+
+All scenario edits are ephemeral component state: no storage, URL, database, or network writes. Financial inputs and results honor privacy blur. `components/ui/ScrollableRegion.tsx` adds a keyboard stop only while a labeled region overflows, including report and debt tables.
+
 ## Request path
 
 ```mermaid

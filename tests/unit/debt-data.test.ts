@@ -83,6 +83,7 @@ describe("buildDebtPlannerData", () => {
 
   it("returns an explicit empty state without manufacturing a projection", () => {
     expect(buildDebtPlannerData([], 500)).toEqual({
+      currency: null, availableCurrencies: [], unknownCurrencyCount: 0,
       debts: [],
       totalBalance: 0,
       totalMonthlyBudget: 0,
@@ -112,6 +113,7 @@ describe("loadDebtPlannerData", () => {
       type: "credit",
       subtype: "credit card",
       current_balance: "1200.50",
+      iso_currency_code: "USD",
       apr: 18,
     },
     {

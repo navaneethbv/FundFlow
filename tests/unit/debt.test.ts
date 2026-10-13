@@ -204,7 +204,7 @@ describe("buildDebtPlannerData & loadDebtPlannerData", () => {
     const supabase = clientStub({
       accounts: {
         data: [
-          { id: "a1", name: "Credit Card", type: "credit", subtype: null, current_balance: 1500, apr: 18.5 },
+          { id: "a1", name: "Credit Card", type: "credit", subtype: null, current_balance: 1500, iso_currency_code: "USD", apr: 18.5 },
           { id: "a2", name: "Checking", type: "depository", subtype: null, current_balance: 5000, apr: null },
         ],
       },

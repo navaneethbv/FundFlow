@@ -1,5 +1,6 @@
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
+import GoalScenarioPlanner from "@/components/goals/GoalScenarioPlanner";
 import GoalsManager from "@/components/goals/GoalsManager";
 import GoalAllocationPanel from "@/components/goals/GoalAllocationPanel";
 import GoalCard from "@/components/goals/GoalCard";
@@ -14,6 +15,7 @@ import { getGoals } from "@/lib/goals";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { loadGoalsPageData } from "@/lib/goals-data";
 import { isLiabilityAccount, type GoalType } from "@/lib/goals-v2";
+import { resolveViewerToday } from "@/lib/report-period";
 import { formatCurrency } from "@/lib/format";
 import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
@@ -44,7 +46,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [goals, data, { data: householdRows }, funded] = await Promise.all([
+  const [goals, data, { data: householdRows }, funded, today] = await Promise.all([
     getGoals(supabase),
     getDashboardData(supabase, undefined, undefined, user?.id, { includeBalanceSheet: false }),
     supabase.from("households").select("id").limit(1),
@@ -55,6 +57,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
     user && goalsV2Enabled
       ? loadGoalsPageData(supabase, user.id)
       : Promise.resolve(null),
+    resolveViewerToday(supabase, user?.id),
   ]);
   const monthlyNet = data.currentMonthIncome - data.currentMonthExpenses;
   const householdId = (householdRows?.[0]?.id as string | undefined) ?? null;
@@ -62,6 +65,15 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
   const fundedGoals = funded?.goals ?? [];
   const visible = fundedGoals.filter((goal) => goal.goal_type === tab);
   const currency = "USD";
+  const scenarioGoals = goalsV2Enabled
+    ? fundedGoals.filter(goal => goal.goal_type === "save_up").map(goal => ({
+        id: goal.id, name: goal.name, targetAmount: goal.target_amount,
+        fundedAmount: goal.funded_amount, targetDate: goal.target_date,
+      }))
+    : goals.map(goal => ({
+        id: goal.id, name: goal.name, targetAmount: goal.target_amount,
+        fundedAmount: goal.saved_amount, targetDate: goal.target_date,
+      }));
 
   const wizardAccounts: WizardAccount[] = (funded?.accounts ?? []).map(
     (account) => ({
@@ -171,6 +183,9 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
           monthlyNet={monthlyNet}
           householdId={householdId}
         />
+      )}
+      {(!goalsV2Enabled || tab === "save_up") && (
+        <GoalScenarioPlanner today={today} goals={scenarioGoals} />
       )}
     </AppShell>
   );

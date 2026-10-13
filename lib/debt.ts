@@ -42,7 +42,7 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/** Simulation cap: a plan that hasn't cleared in 50 years never will. */
+/** Projection horizon: no payment schedule extends beyond 50 years. */
 const MAX_MONTHS = 600;
 
 type DebtState = {
@@ -104,11 +104,22 @@ function completedPlan(state: DebtState[], order: DebtInput[]): PayoffPlan {
  * Simulates month-by-month payoff. The monthly budget is fixed at
  * (sum of minimum payments + extraMonthly); when a debt clears, its
  * payment automatically rolls into the next debt in focus order.
- * Returns null when the debts list is empty or the budget can never
- * outrun the interest.
+ * Returns null for empty/invalid input or when payoff is outside the
+ * 600-month horizon or safe cent precision.
  */
-export function buildPayoffPlan(input: PayoffPlanInput): PayoffPlan | null {
+export interface DebtScheduleRow {
+  month: number;
+  openingBalance: number;
+  interest: number;
+  payment: number;
+  closingBalance: number;
+}
+export interface ScheduledPayoffPlan extends PayoffPlan { schedule: DebtScheduleRow[] }
+
+export function buildPayoffSchedule(input: PayoffPlanInput): ScheduledPayoffPlan | null {
   if (input.debts.length === 0) return null;
+  const valid = (value: number) => Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100));
+  if (!valid(input.extraMonthly) || input.debts.some(debt => !valid(debt.balance) || !valid(debt.apr) || (debt.minPayment !== undefined && !valid(debt.minPayment)))) return null;
 
   const order = [...input.debts].sort((a, b) =>
     input.strategy === "avalanche" ? b.apr - a.apr : a.balance - b.balance,
@@ -123,29 +134,42 @@ export function buildPayoffPlan(input: PayoffPlanInput): PayoffPlan | null {
     payoffMonth: 0,
   }));
 
+  const schedule: DebtScheduleRow[] = [];
+  if (state.every((debt) => debt.balance <= 0)) return { ...completedPlan(state, order), schedule };
   const budget = round2(
     state.reduce((sum, debt) => sum + debt.minPayment, 0) + input.extraMonthly,
   );
 
-  // Fast fail: if the first month's interest already swallows the whole
-  // budget, balances only ever grow.
-  const firstMonthInterest = round2(
-    state.reduce((sum, debt) => sum + debt.balance * debt.monthlyRate, 0),
-  );
-  if (budget <= firstMonthInterest) return null;
+  // Equality with initial interest can still converge as priority payments
+  // shift balances between rates. Only a zero budget is an immediate failure.
+  if (budget <= 0) return null;
 
   for (let month = 1; month <= MAX_MONTHS; month++) {
+    const openingBalance = round2(state.reduce((sum, debt) => sum + debt.balance, 0));
     applyInterest(state);
+    const afterInterest = round2(state.reduce((sum, debt) => sum + debt.balance, 0));
+    const accruedInterest = round2(state.reduce((sum, debt) => sum + debt.interestPaid, 0));
+    // Stop before runaway capitalization loses cent precision.
+    if (!Number.isSafeInteger(Math.round(afterInterest * 100)) || !Number.isSafeInteger(Math.round(accruedInterest * 100))) return null;
 
     // Minimum payments first, then everything left cascades to the focus
     // debt (state is already in focus order).
     const available = applyMinimumPayments(state, budget, month);
     applyExtraPayments(state, available, month);
 
+    const closingBalance = round2(state.reduce((sum, debt) => sum + debt.balance, 0));
+    schedule.push({ month, openingBalance, interest: round2(afterInterest - openingBalance), payment: round2(afterInterest - closingBalance), closingBalance });
     if (state.every((debt) => debt.balance <= 0)) {
-      return { ...completedPlan(state, order), months: month };
+      return { ...completedPlan(state, order), months: month, schedule };
     }
   }
 
   return null;
+}
+
+/** Compatibility wrapper: existing callers retain the exact plan shape. */
+export function buildPayoffPlan(input: PayoffPlanInput): PayoffPlan | null {
+  const result = buildPayoffSchedule(input);
+  if (!result) return null;
+  return { months: result.months, totalInterest: result.totalInterest, order: result.order, debts: result.debts };
 }

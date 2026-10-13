@@ -204,3 +204,30 @@ describe("CardAprSection debt-planner anchor", () => {
     expect(html).toContain('id="card-aprs"');
   });
 });
+
+it('keeps currency selection, strategy links, and all monetary panels in the selected currency', () => {
+  const data = buildDebtPlannerData([
+    {id:'eur',name:'Euro loan',balance:1200,apr:5,currency:'EUR'},
+    {id:'usd',name:'Dollar card',balance:9999,apr:10,currency:'USD'},
+    {id:'unknown',name:'Unresolved',balance:100,apr:10,currency:null},
+  ],50,'EUR');
+  const html = renderToStaticMarkup(createElement(DebtPlannerView, {
+    data,strategy:'snowball',extraMonthly:50,scopeParam:'household-1',
+    loanDetailsEnabled:true,amortizationEnabled:true,today:'2026-10-13',
+  }));
+  expect(html).toContain('€1,200.00');
+  expect(html).not.toContain('$');
+  expect(html).not.toContain('Dollar card');
+  expect(html).toContain('currency=EUR');
+  expect(html).toContain('scope=household-1');
+  expect(html).toContain('extra=50');
+  expect(html).toContain('with unknown currency excluded');
+  expect(html).toContain('Euro loan amortization');
+});
+
+it('explains why unknown currency accounts cannot form a monetary projection', () => {
+  const data = buildDebtPlannerData([{id:'unknown',name:'Debt',balance:100,apr:10,currency:null}],0);
+  const html = renderToStaticMarkup(createElement(DebtPlannerView,{data,strategy:'avalanche',extraMonthly:0}));
+  expect(html).toContain('unknown currency are excluded');
+  expect(html).not.toContain('$');
+});

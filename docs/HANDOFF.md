@@ -1,5 +1,17 @@
 # FundFlow Session Handoff
 
+## 2026-10-13: Budget, goal, and debt planning
+
+Branch `feat/budget-goal-debt-planning` is stacked on PR #225, whose isolated quality follow-up is `f644998`. The [15-feature contract](superpowers/specs/2026-10-13-budget-goal-debt-planning.md) covers budget search/attention/sorting/pace/transfer preview, savings cadence/lump sum/pauses/milestones/deadline funding, and debt lump sums/assumptions/target payments/monthly schedule/payment ladder. See [architecture](ARCHITECTURE.md#budget-savings-and-debt-scenarios) for calculation and currency boundaries.
+
+Independent review reproduced and fixed the shared debt engine's incorrect first-month-interest rejection: valid payoff plans may initially capitalize interest, and tiny balances may round monthly interest to zero. Regression tests cover both. A legacy null-APR fixture now declares its known USD currency; unknown provider currencies remain excluded. The earlier PR's separate follow-up reduces filter complexity, retains bounded sequential reads, and makes overflow regions keyboard accessible without permanent tab stops.
+
+Final local validation: 6,437 coverage tests passed, with 99.32% lines and 95.04% branches; 6,432 future-clock unit tests passed; all 74 browser tests passed. Typecheck, lint, production build with placeholder public configuration, palette validation, focused complexity checks, and dependency audit (zero vulnerabilities) passed. Browser tests exercise real components at 375px/1440px, editing/reset/error states, privacy blur, accessibility, scrolling, and no scenario storage/network writes. Hosted status belongs to the PR; these checks do not establish live authenticated database acceptance.
+
+Twenty-two integration files and three integration tests remain skipped without disposable service configuration. No new dependencies were needed; freshness checks found no further patch updates, while major toolchain/provider and unrelated platform upgrades remain deferred for compatibility work. The normal browser download was unusable, so tests used a temporary Chromium binary without changing repository dependencies. `graphify update .` remains unavailable because the binary is missing.
+
+No AI behavior, database migration, feature flag, production data, merge, or production deployment changed. Scenarios remain memory-only, goal amounts retain existing USD semantics, and debt plans never combine currencies.
+
 ## 2026-10-13: Transaction and reporting essentials
 
 Branch `feat/transaction-reporting-essentials`, based on main `70adee4`, adds the 15 features in [the acceptance contract](superpowers/specs/2026-10-13-transaction-reporting-essentials.md).

@@ -7,16 +7,19 @@ import type {
   DebtPlannerData,
   DebtStrategy,
 } from "@/lib/debt-data";
+import DebtScenarioPlanner from "@/components/debt/DebtScenarioPlanner";
 import LoanDetail from "@/components/debt/LoanDetail";
 
 function plannerHref(
   strategy: DebtStrategy,
   extraMonthly: number,
   scopeParam?: string,
+  currency?: string | null,
 ): string {
   const params = new URLSearchParams({ strategy });
   if (extraMonthly > 0) params.set("extra", String(extraMonthly));
   if (scopeParam) params.set("scope", scopeParam);
+  if (currency) params.set("currency", currency);
   return `/debt?${params.toString()}`;
 }
 
@@ -24,7 +27,8 @@ type DebtPlan = DebtPlannerData["avalanche"];
 type DebtRow = DebtPlannerData["debts"][number];
 type PlanResult = NonNullable<DebtPlan>["debts"][number];
 
-function PayoffOrderPanel({ strategy, selectedPlan, debtById, resultById }: Readonly<{
+function PayoffOrderPanel({ strategy, selectedPlan, debtById, resultById, currency }: Readonly<{
+  currency: string;
   strategy: DebtStrategy;
   selectedPlan: DebtPlan;
   debtById: Map<string, DebtRow>;
@@ -59,7 +63,7 @@ function PayoffOrderPanel({ strategy, selectedPlan, debtById, resultById }: Read
                   {index + 1}. {debt.name}
                 </span>
                 <span data-money className="shrink-0 font-semibold tabular-nums" style={{ color: "var(--viz-neg)" }}>
-                  {formatCurrency(debt.balance)}
+                  {formatCurrency(debt.balance, currency)}
                 </span>
               </div>
               {debt.aprAssumed && (
@@ -73,7 +77,7 @@ function PayoffOrderPanel({ strategy, selectedPlan, debtById, resultById }: Read
                     mode, where the desktop table keeps its column heads. */}
                 <span>APR <span className="money">{debt.apr.toFixed(2)}%</span></span>
                 <span>Month {result.payoffMonth}</span>
-                <span>Interest <span data-money>{formatCurrency(result.interestPaid)}</span></span>
+                <span>Interest <span data-money>{formatCurrency(result.interestPaid, currency)}</span></span>
               </div>
             </div>
           );
@@ -110,12 +114,12 @@ function PayoffOrderPanel({ strategy, selectedPlan, debtById, resultById }: Read
                     )}
                   </td>
                   <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
-                    {formatCurrency(debt.balance)}
+                    {formatCurrency(debt.balance, currency)}
                   </td>
                   <td className="money px-3 py-3 text-right">{debt.apr.toFixed(2)}%</td>
                   <td className="px-3 py-3 text-right">Month {result.payoffMonth}</td>
                   <td data-money className="px-3 py-3 text-right" style={{ color: "var(--viz-neg)" }}>
-                    {formatCurrency(result.interestPaid)}
+                    {formatCurrency(result.interestPaid, currency)}
                   </td>
                 </tr>
               );
@@ -127,15 +131,15 @@ function PayoffOrderPanel({ strategy, selectedPlan, debtById, resultById }: Read
   );
 }
 
-function StrategyComparison({ strategy, selectedPlan, comparison }: Readonly<{ strategy: DebtStrategy; selectedPlan: DebtPlan; comparison: DebtPlan }>) {
+function StrategyComparison({ strategy, selectedPlan, comparison, currency }: Readonly<{ currency: string; strategy: DebtStrategy; selectedPlan: DebtPlan; comparison: DebtPlan }>) {
   return (
   <Panel title="Strategy comparison" eyebrow="Same monthly budget">
     <div className="grid gap-4 text-sm sm:grid-cols-2">
       <div>
         <p className="font-semibold capitalize">{strategy}</p>
-        <p className="mt-1 text-muted">
+        <p data-money className="mt-1 text-muted">
           {selectedPlan
-            ? `${selectedPlan.months} months and ${formatCurrency(selectedPlan.totalInterest)} projected interest.`
+            ? `${selectedPlan.months} months and ${formatCurrency(selectedPlan.totalInterest, currency)} projected interest.`
             : "The projection does not converge."}
         </p>
       </div>
@@ -143,9 +147,9 @@ function StrategyComparison({ strategy, selectedPlan, comparison }: Readonly<{ s
         <p className="font-semibold capitalize">
           {strategy === "avalanche" ? "snowball" : "avalanche"}
         </p>
-        <p className="mt-1 text-muted">
+        <p data-money className="mt-1 text-muted">
           {comparison
-            ? `${comparison.months} months and ${formatCurrency(comparison.totalInterest)} projected interest.`
+            ? `${comparison.months} months and ${formatCurrency(comparison.totalInterest, currency)} projected interest.`
             : "The projection does not converge."}
         </p>
       </div>
@@ -154,7 +158,7 @@ function StrategyComparison({ strategy, selectedPlan, comparison }: Readonly<{ s
   );
 }
 
-function UnplannedDebtsPanel({ debts }: Readonly<{ debts: DebtRow[] }>) {
+function UnplannedDebtsPanel({ debts, currency }: Readonly<{ debts: DebtRow[]; currency: string }>) {
   if (!debts.some((debt) => !debt.planned)) return null;
   return (
     <Panel tone="warning" title="Not in the projection: APR needed">
@@ -169,7 +173,7 @@ function UnplannedDebtsPanel({ debts }: Readonly<{ debts: DebtRow[] }>) {
             <li key={debt.id} className="flex items-center justify-between gap-3">
               <span className="min-w-0 break-words font-semibold">{debt.name}</span>
               <span data-money className="shrink-0 font-semibold tabular-nums">
-                {formatCurrency(debt.balance)}
+                {formatCurrency(debt.balance, currency)}
               </span>
             </li>
           ))}
@@ -195,12 +199,12 @@ export default function DebtPlannerView({
   amortizationEnabled?: boolean;
   today?: string;
 }>) {
+  const currency = data.currency ?? "USD";
   if (data.debts.length === 0) {
     return (
       <Panel title="No debt accounts found" eyebrow="Debt payoff projection">
         <p className="text-sm text-muted">
-          Connect or add a liability account to compare avalanche and snowball
-          payoff projections.
+          {data.unknownCurrencyCount ? "Accounts with unknown currency are excluded. A known account currency is required for a monetary projection." : "Connect or add a liability account to compare avalanche and snowball payoff projections."}
         </p>
         <Link
           href="/settings?section=institutions"
@@ -230,12 +234,12 @@ export default function DebtPlannerView({
             items={[
               {
                 label: "Avalanche",
-                href: plannerHref("avalanche", extraMonthly, scopeParam),
+                href: plannerHref("avalanche", extraMonthly, scopeParam, currency),
                 active: strategy === "avalanche",
               },
               {
                 label: "Snowball",
-                href: plannerHref("snowball", extraMonthly, scopeParam),
+                href: plannerHref("snowball", extraMonthly, scopeParam, currency),
                 active: strategy === "snowball",
               },
             ]}
@@ -253,6 +257,7 @@ export default function DebtPlannerView({
           className="flex flex-wrap items-end gap-3"
         >
           <input type="hidden" name="strategy" value={strategy} />
+          <label className="grid gap-1.5 text-sm font-semibold">Currency<select name="currency" defaultValue={currency} className="min-h-11 rounded-field border border-panel-border bg-panel-2 px-3">{(data.availableCurrencies ?? [currency]).map(code => <option key={code} value={code}>{code}</option>)}</select></label>
           {scopeParam && <input type="hidden" name="scope" value={scopeParam} />}
           <label className="grid gap-1.5 text-sm font-semibold">
             <span>Extra monthly payment</span>
@@ -263,7 +268,7 @@ export default function DebtPlannerView({
               step="0.01"
               defaultValue={extraMonthly || ""}
               placeholder="0.00"
-              className="min-h-11 w-44 rounded-field border border-panel-border bg-panel-2 px-3 text-foreground focus-visible:outline-2"
+              className="money min-h-11 w-44 rounded-field border border-panel-border bg-panel-2 px-3 text-foreground focus-visible:outline-2"
             />
           </label>
           <button type="submit" className={buttonVariants()}>
@@ -271,6 +276,9 @@ export default function DebtPlannerView({
           </button>
         </form>
       </Panel>
+
+      <p className="text-sm text-muted">All totals and projections are in {currency}. {Boolean(data.unknownCurrencyCount) && `${data.unknownCurrencyCount} account(s) with unknown currency excluded.`} Minimum payments are estimates, not contractual amounts.</p>
+
 
       {/* Each name-value pair lives in a neutral div that is a valid dl child,
           rather than a Panel (a section): HTML requires dt/dd to be grouped
@@ -281,7 +289,7 @@ export default function DebtPlannerView({
             Total balance
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
-            {formatCurrency(data.totalBalance)}
+            {formatCurrency(data.totalBalance, currency)}
           </dd>
         </div>
         <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
@@ -289,7 +297,7 @@ export default function DebtPlannerView({
             Monthly budget
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
-            {formatCurrency(data.totalMonthlyBudget)}
+            {formatCurrency(data.totalMonthlyBudget, currency)}
           </dd>
         </div>
         <div className="min-w-0 rounded-card border border-panel-border bg-panel p-5 shadow-card">
@@ -305,14 +313,16 @@ export default function DebtPlannerView({
             Total projected interest
           </dt>
           <dd data-money className="metric-value mt-1 text-2xl font-bold" style={{ color: "var(--viz-neg)" }}>
-            {selectedPlan ? formatCurrency(selectedPlan.totalInterest) : "Not reached"}
+            {selectedPlan ? formatCurrency(selectedPlan.totalInterest, currency) : "Not reached"}
           </dd>
         </div>
       </dl>
 
-      <PayoffOrderPanel strategy={strategy} selectedPlan={selectedPlan} debtById={debtById} resultById={resultById} />
+      <DebtScenarioPlanner key={JSON.stringify([data.debts,currency,strategy,extraMonthly,scopeParam])} debts={data.debts} currency={currency} strategy={strategy} extraMonthly={extraMonthly} />
 
-      <StrategyComparison strategy={strategy} selectedPlan={selectedPlan} comparison={comparison} />
+      <PayoffOrderPanel strategy={strategy} selectedPlan={selectedPlan} debtById={debtById} resultById={resultById} currency={currency} />
+
+      <StrategyComparison strategy={strategy} selectedPlan={selectedPlan} comparison={comparison} currency={currency} />
 
       {loanDetailsEnabled && amortizationEnabled && (
         <LoanDetail
@@ -320,10 +330,11 @@ export default function DebtPlannerView({
           today={today ?? "1970-01-01"}
           extraMonthly={extraMonthly}
           enabled
+          currency={currency}
         />
       )}
 
-      <UnplannedDebtsPanel debts={data.debts} />
+      <UnplannedDebtsPanel debts={data.debts} currency={currency} />
 
       {data.debts.some((debt) => debt.aprAssumed && debt.planned) && (
         <Panel tone="warning" title="Replace assumed APRs for a more useful projection">

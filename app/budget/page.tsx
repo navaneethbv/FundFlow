@@ -17,7 +17,7 @@ import {
 } from "@/lib/financial-scope";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { UNKNOWN_CURRENCY, formatMonth } from "@/lib/format";
-import { localMonthKey } from "@/lib/format-date";
+import { resolveViewerToday } from "@/lib/report-period";
 import { firstSearchParam } from "@/lib/search-params";
 import { createClient } from "@/lib/supabase/server";
 
@@ -104,7 +104,8 @@ export default async function BudgetPage({
   } = await supabase.auth.getUser();
   if (!user) notFound();
 
-  const currentMonth = localMonthKey();
+  const viewerToday = await resolveViewerToday(supabase, user.id);
+  const currentMonth = viewerToday.slice(0, 7);
   const month = parseBudgetMonth(firstSearchParam(params.month), currentMonth);
   const horizon = parseBudgetHorizon(firstSearchParam(params.horizon));
   const activeSummary = summaryTab(firstSearchParam(params.summary));
@@ -240,6 +241,8 @@ export default async function BudgetPage({
           // the user navigates between months, so the optimistic edit state
           // always shows the month the PUT request is actually writing to.
           key={`${month}-${scope ?? "mine"}-${currency}`}
+          viewerToday={viewerToday}
+          dataComplete={!loaded.truncated && !loaded.stale}
           initialView={loaded.view}
           proposals={loaded.proposals}
           month={month}

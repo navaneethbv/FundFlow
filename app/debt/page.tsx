@@ -23,6 +23,7 @@ interface PageProps {
     strategy?: string | string[];
     extra?: string | string[];
     scope?: string | string[];
+    currency?: string | string[];
   }>;
 }
 
@@ -30,10 +31,12 @@ function scopeHref(
   scope: string | undefined,
   strategy: "avalanche" | "snowball",
   extraMonthly: number,
+  currency?: string | null,
 ): string {
   const params = new URLSearchParams({ strategy });
   if (extraMonthly > 0) params.set("extra", String(extraMonthly));
   if (scope) params.set("scope", scope);
+  if (currency) params.set("currency", currency);
   return `/debt?${params.toString()}`;
 }
 
@@ -63,6 +66,7 @@ export default async function DebtPage({ searchParams }: Readonly<PageProps>) {
   const data = await loadDebtPlannerData(supabase, {
     scope,
     extraMonthly,
+    currency: typeof params.currency === "string" ? params.currency : params.currency?.[0],
   });
   const viewerToday = await resolveViewerToday(supabase, user.id);
   const scopeParam = serializeFinancialScope(scope);
@@ -79,12 +83,12 @@ export default async function DebtPage({ searchParams }: Readonly<PageProps>) {
                 items={[
                   {
                     label: "Mine",
-                    href: scopeHref(undefined, strategy, extraMonthly),
+                    href: scopeHref(undefined, strategy, extraMonthly, data.currency),
                     active: scope.kind === "mine",
                   },
                   {
                     label: "Household",
-                    href: scopeHref(visibleHouseholdIds[0], strategy, extraMonthly),
+                    href: scopeHref(visibleHouseholdIds[0], strategy, extraMonthly, data.currency),
                     active: scope.kind === "household",
                   },
                 ]}
