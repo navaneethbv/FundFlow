@@ -236,7 +236,7 @@ function BudgetRow({
       <th scope="row" className="px-4 py-3 text-left align-top font-medium">
         <CategoryChip label={line.label} />
         {line.rolloverCarry !== 0 && (
-          <span className="mt-1 block text-xs font-normal text-muted">
+          <span data-money className="mt-1 block text-xs font-normal text-muted">
             {formatCurrency(line.rolloverCarry, currency)} carried from last month
           </span>
         )}
@@ -259,6 +259,7 @@ function BudgetRow({
             {currencySymbol(currency)}
           </span>
           <input
+            data-money
             aria-label={`Planned amount for ${line.label}`}
             type="number"
             min="0"
@@ -271,7 +272,7 @@ function BudgetRow({
           />
         </span>
       </td>
-      <td className="px-4 py-3 text-right align-top text-muted">
+      <td data-money className="px-4 py-3 text-right align-top text-muted">
         {formatCurrency(line.actual, currency)}
       </td>
       <td className="px-4 py-3 text-right align-top">
@@ -335,6 +336,7 @@ function BudgetCard({
           <label className="min-w-0 text-xs text-muted">
             <span className="block">Planned</span>
             <input
+              data-money
               aria-label={`Planned amount for ${line.label}`}
               type="number"
               min="0"
@@ -378,14 +380,16 @@ export default function BudgetTable({
   currency,
   disabled,
   onUpdate,
+  explored = false,
 }: Readonly<{
   section: BudgetSection;
+  explored?: boolean;
   currency: string;
   disabled: boolean;
   onUpdate: (line: BudgetLine, patch: BudgetLinePatch) => Promise<void>;
 }>) {
   const [showUnbudgeted, setShowUnbudgeted] = useState(false);
-  const lines = showUnbudgeted
+  const lines = explored || showUnbudgeted
     ? section.lines
     : section.lines.filter((line) => line.budgeted);
 
@@ -455,10 +459,10 @@ export default function BudgetTable({
         </>
       ) : (
         <p className="border-t border-panel-border px-5 py-6 text-sm text-muted">
-          No categories in this section yet.
+          {explored ? "No categories match in this section." : "No categories in this section yet."}
         </p>
       )}
-      {section.unbudgetedCount > 0 && (
+      {!explored && section.unbudgetedCount > 0 && (
         <div className="border-t border-panel-border px-5 py-3">
           <button
             type="button"

@@ -18,6 +18,7 @@ export interface DebtPlannerAccountInput {
   apr: number | null;
   /** Account type (credit, loan, ...): only cards get the assumed APR. */
   type?: string | null;
+  currency?: string | null;
 }
 
 export interface DebtPlannerAccount {
@@ -36,6 +37,9 @@ export interface DebtPlannerAccount {
 }
 
 export interface DebtPlannerData {
+  currency?: string | null;
+  availableCurrencies?: string[];
+  unknownCurrencyCount?: number;
   debts: DebtPlannerAccount[];
   totalBalance: number;
   totalMonthlyBudget: number;
@@ -67,10 +71,33 @@ export function parseExtraMonthly(
   return Number.isFinite(parsed) ? round2(parsed) : 0;
 }
 
+const KNOWN_CURRENCIES = new Set(Intl.supportedValuesOf("currency"));
+
+function currencyOf(account: DebtPlannerAccountInput): string | null {
+  // Older in-process fixtures omit currency. Provider reads always pass null
+  // explicitly when currency is absent, so real unknown amounts never become USD.
+  if (account.currency === undefined) return "USD";
+  if (!account.currency) return null;
+  const currency = account.currency.trim().toUpperCase();
+  return KNOWN_CURRENCIES.has(currency) ? currency : null;
+}
+
+function selectCurrency(available: string[], requested?: string): string | null {
+  if (requested && available.includes(requested)) return requested;
+  if (available.includes("USD")) return "USD";
+  return available[0] ?? null;
+}
+
 export function buildDebtPlannerData(
   accounts: DebtPlannerAccountInput[],
   extraMonthly: number,
+  requestedCurrency?: string,
 ): DebtPlannerData {
+  const eligible = accounts.filter(account => Number.isFinite(account.balance) && account.balance > 0);
+  const availableCurrencies = [...new Set(eligible.map(currencyOf).filter((value): value is string => value !== null))].sort((a, b) => a.localeCompare(b));
+  const currency = selectCurrency(availableCurrencies, requestedCurrency);
+  const unknownCurrencyCount = eligible.filter(account => currencyOf(account) === null).length;
+  accounts = eligible.filter(account => currency !== null && currencyOf(account) === currency);
   const debts = accounts
     .map((account) => {
       // `current_balance` is Plaid's `balances.current` verbatim: positive is
@@ -78,13 +105,14 @@ export function buildDebtPlannerData(
       // debt — so it is filtered out below rather than made absolute, which is
       // also what `lib/dashboard.ts`'s planner does.
       const balance = round2(account.balance);
-      const aprAssumed = account.apr === null;
+      const knownApr = account.apr !== null && Number.isFinite(account.apr) && account.apr >= 0 ? account.apr : null;
+      const aprAssumed = knownApr === null;
       const isCard = (account.type ?? "").toLowerCase() === "credit";
       // The 22% assumption is a card rate (M-9). A mortgage or loan with no
       // APR stays visible but unplanned: projecting it at 22% with a 2%
       // minimum turns a 300k mortgage into a 6k/month emergency.
-      const planned = account.apr !== null || isCard;
-      const apr = account.apr ?? ASSUMED_APR;
+      const planned = knownApr !== null || isCard;
+      const apr = knownApr ?? ASSUMED_APR;
       return {
         id: account.id,
         name: account.name,
@@ -99,6 +127,7 @@ export function buildDebtPlannerData(
 
   if (debts.length === 0) {
     return {
+      currency, availableCurrencies, unknownCurrencyCount,
       debts: [],
       totalBalance: 0,
       totalMonthlyBudget: 0,
@@ -107,7 +136,7 @@ export function buildDebtPlannerData(
     };
   }
 
-  const normalizedExtra = Math.max(0, round2(extraMonthly));
+  const normalizedExtra = Number.isFinite(extraMonthly) ? Math.max(0, round2(extraMonthly)) : 0;
   // `DebtInput.name` is the plan's identity key — it is what comes back in
   // `PayoffPlan.order` and `PayoffPlan.debts[].name`. Account names are not
   // unique (two cards can both be "Visa"), so the id goes in and the display
@@ -123,6 +152,7 @@ export function buildDebtPlannerData(
   }));
 
   return {
+    currency, availableCurrencies, unknownCurrencyCount,
     debts,
     totalBalance: round2(debts.reduce((sum, debt) => sum + debt.balance, 0)),
     totalMonthlyBudget: round2(
@@ -144,7 +174,7 @@ export function buildDebtPlannerData(
 
 export async function loadDebtPlannerData(
   supabase: SupabaseClient,
-  options: { scope: FinancialScope; extraMonthly: number },
+  options: { scope: FinancialScope; extraMonthly: number; currency?: string },
 ): Promise<DebtPlannerData> {
   const userId = scopeQueryUserId(options.scope);
   let query = supabase
@@ -168,7 +198,8 @@ export async function loadDebtPlannerData(
       balance: Number(row.current_balance ?? 0),
       apr: row.apr === null ? null : Number(row.apr),
       type: String(row.type ?? ""),
+      currency: typeof row.iso_currency_code === "string" ? row.iso_currency_code : null,
     }));
 
-  return buildDebtPlannerData(accounts, options.extraMonthly);
+  return buildDebtPlannerData(accounts, options.extraMonthly, options.currency);
 }

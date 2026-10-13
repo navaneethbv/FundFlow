@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import BudgetExplorer from "@/components/budget/BudgetExplorer";
+import { defaultBudgetExplorer, exploreBudgetLines } from "@/lib/budget-explorer";
 import BudgetRightRail from "@/components/budget/BudgetRightRail";
 import BudgetTable, {
   type BudgetLinePatch,
@@ -279,9 +281,13 @@ export default function BudgetPlanner({
   summaryTab,
   summaryLinks,
   features = {},
+  viewerToday,
+  dataComplete = false,
 }: Readonly<{
   /** Server-resolved flags; client components cannot read them directly. */
   features?: BudgetPlannerFeatures;
+  viewerToday?: string;
+  dataComplete?: boolean;
   initialView: BudgetViewData;
   proposals: BudgetSeedProposal[];
   month: string;
@@ -293,6 +299,7 @@ export default function BudgetPlanner({
   const [monthlyData, setMonthlyData] = useState(
     initialView.horizon === "monthly" ? initialView.month : null,
   );
+  const [explorerOptions, setExplorerOptions] = useState(defaultBudgetExplorer);
   const [saving, setSaving] = useState(false);
   const [announcement, setAnnouncement] = useState("");
 
@@ -347,8 +354,9 @@ export default function BudgetPlanner({
   }
   if (!monthlyData) return null;
 
-  const incomeSection = monthlyData.sections.find((section) => section.key === "income");
-  const expenseSections = monthlyData.sections.filter((section) => section.key !== "income");
+  const visibleSections = monthlyData.sections.map(section => ({...section, lines: exploreBudgetLines(section.lines, explorerOptions)}));
+  const incomeSection = visibleSections.find((section) => section.key === "income");
+  const expenseSections = visibleSections.filter((section) => section.key !== "income");
   const contributionsPlanned = round2(
     monthlyData.contributions.goals.reduce((total, goal) => total + goal.planned, 0),
   );
@@ -394,10 +402,13 @@ export default function BudgetPlanner({
             </Panel>
           )}
 
+          <BudgetExplorer data={monthlyData} options={explorerOptions} onChange={setExplorerOptions} visibleCount={visibleSections.reduce((total, section) => total + section.lines.length, 0)} currency={currency} today={viewerToday} complete={dataComplete} />
+
           <div className="space-y-3">
             <SuperBand label="Income" />
             {incomeSection && (
               <BudgetTable
+                explored
                 section={incomeSection}
                 currency={currency}
                 disabled={saving}
@@ -418,6 +429,7 @@ export default function BudgetPlanner({
             {expenseSections.map((section) => (
               <BudgetTable
                 key={section.key}
+                explored
                 section={section}
                 currency={currency}
                 disabled={saving}

@@ -1,5 +1,11 @@
 # FundFlow — Future Todos
 
+## Proposed budget, goal, and debt planning, 2026-10-13
+
+`feat/budget-goal-debt-planning` adds [15 planning features](superpowers/specs/2026-10-13-budget-goal-debt-planning.md), stacked on PR #225 (`feat/transaction-reporting-essentials`). Budget exploration and all financial scenarios are ready for review; scenario edits are intentionally not persisted. No migration, feature flag, merge, or production change is included.
+
+PR #225 also receives isolated readability and keyboard-scroll fixes from its hosted quality review. Validation evidence and environment limits are recorded in [the handoff](HANDOFF.md).
+
 ## Proposed transaction and reporting essentials, 2026-10-13
 
 The `feat/transaction-reporting-essentials` branch implements the 15 additions in

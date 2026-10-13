@@ -81,8 +81,8 @@ describe("debt-data uncovered branches", () => {
     const client = clientStub({
       accounts: {
         data: [
-          { id: "null-type", name: "Unknown", type: null, subtype: null, current_balance: 100, apr: null },
-          { id: "loan-null-apr", name: "Loan", type: "loan", subtype: null, current_balance: 2000, apr: null },
+          { id: "null-type", name: "Unknown", type: null, subtype: null, current_balance: 100, apr: null, iso_currency_code: "USD" },
+          { id: "loan-null-apr", name: "Loan", type: "loan", subtype: null, current_balance: 2000, apr: null, iso_currency_code: "USD" },
         ],
       },
     });
