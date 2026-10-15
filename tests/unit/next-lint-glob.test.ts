@@ -30,6 +30,10 @@ function roots(rootDir: unknown): string[] {
 }
 
 describe("Next lint glob replacement", () => {
+  it("resolves the installed plugin's glob dependency to the audited adapter", () => {
+    expect(pluginRequire.resolve("fast-glob")).toBe(require.resolve("../../tooling/next-lint-glob/index.js"));
+  });
+
   it("retains the default root and matches literal directories without descendants", () => {
     expect(getRootDirs({ cwd: fixture, settings: {} })).toEqual([fixture]);
     expect(roots(alpha)).toEqual([alpha]);
