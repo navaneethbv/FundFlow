@@ -1,5 +1,10 @@
 # FundFlow Session Handoff
 
+This is a dated verification and implementation log.
+PRs #225 and #226 merged on October 13, 2026; their pre-merge branch descriptions below are historical.
+Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
+A recorded deployment or local test result does not verify a later production build.
+
 ## 2026-10-13: Planning PR quality follow-up
 
 PR #226 replaces non-null assertions with narrowed/checked values and splits decimal validation into whole/fraction checks. The Sonar follow-up adds explicit alphabetical currency comparison, stable schedule/ladder keys, unambiguous input labels, and clearer test/error conventions. Focused validation passes 74 unit tests, six mobile/desktop browser tests, lint, and typecheck. The preceding full-suite results below remain the baseline; hosted checks validate the updated commit.

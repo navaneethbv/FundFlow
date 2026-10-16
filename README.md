@@ -121,7 +121,7 @@ unset. Everything else in the app works unchanged.
 ## Setup
 
 ### 1. Prerequisites
-- Node 20+ and npm
+- Node.js 22 and npm, matching the GitHub Actions validation workflow
 - A Supabase project ([supabase.com](https://supabase.com))
 - A Plaid account with Sandbox keys ([dashboard.plaid.com](https://dashboard.plaid.com/developers/keys))
 

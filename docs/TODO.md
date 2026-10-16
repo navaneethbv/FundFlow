@@ -1,16 +1,19 @@
-# FundFlow — Future Todos
+# FundFlow - Deferred work and checkpoints
 
-## Proposed budget, goal, and debt planning, 2026-10-13
+Source status checked October 16, 2026.
+Dated deployment, migration, and verification entries below describe their recorded checkpoints; they do not verify the current production environment.
+Remaining live acceptance and feature-flag decisions stay separate from a merged implementation.
 
-`feat/budget-goal-debt-planning` adds [15 planning features](superpowers/specs/2026-10-13-budget-goal-debt-planning.md), stacked on PR #225 (`feat/transaction-reporting-essentials`). Budget exploration and all financial scenarios are ready for review; scenario edits are intentionally not persisted. No migration, feature flag, merge, or production change is included.
+## Merged budget, goal, and debt planning, 2026-10-13
 
-PR #225 also receives isolated readability and keyboard-scroll fixes from its hosted quality review. Validation evidence and environment limits are recorded in [the handoff](HANDOFF.md).
+[PR #226](https://github.com/navaneethbv/FundFlow/pull/226) merged the [15 planning features](superpowers/specs/2026-10-13-budget-goal-debt-planning.md) on October 13.
+Budget exploration and the savings/debt scenarios are present on the default branch.
+Scenario edits remain in memory and are intentionally not persisted.
+Validation evidence and environment limits are recorded in [the handoff](HANDOFF.md).
 
-## Proposed transaction and reporting essentials, 2026-10-13
+## Merged transaction and reporting essentials, 2026-10-13
 
-The `feat/transaction-reporting-essentials` branch implements the 15 additions in
-[the feature contract](superpowers/specs/2026-10-13-transaction-reporting-essentials.md), including the previously recorded tag/untagged ledger filter and report-period preset gaps.
-No migration, feature-flag change, or production deployment is part of this PR.
+[PR #225](https://github.com/navaneethbv/FundFlow/pull/225) merged the [15 additions](superpowers/specs/2026-10-13-transaction-reporting-essentials.md) on October 13, including tag/untagged ledger filters and report-period presets.
 Report-section layout persistence and the existing atomic-write follow-ups remain separate work.
 
 ## Current review: Functionality and Sure parity, 2026-10-03
@@ -21,7 +24,7 @@ Read-only production acceptance found a remaining Sort-trigger layering defect; 
 Production data was not changed.
 
 - Make split replacement, annotation updates, and linked goal-progress writes atomic, with owner validation and disposable database failure/concurrency tests.
-- Tag/untagged ledger filters and report period presets are implemented in the proposed branch above; deployment remains pending review.
+- Tag/untagged ledger filters and report period presets merged in PR #225; this audit does not establish their current production acceptance.
 - Evaluate report-section layout persistence separately from existing dashboard customization.
 - Historical FX, additional connectors, native clients/FinanceKit, and broader integration APIs require product/provider/security decisions before implementation.
 - Complete disposable-environment acceptance for mutation, authentication, storage, import undo, and delivery flows.
