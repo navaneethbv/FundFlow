@@ -128,7 +128,7 @@ export default function PriceSpikeBanner({
             onClick={() => {
               dismiss(visibleAlerts.map((a) => a.id));
             }}
-            aria-label="Dismiss price increase alerts"
+            aria-label="Dismiss all price increase alerts"
           >
             Dismiss all
           </Button>
