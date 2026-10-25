@@ -27,6 +27,7 @@ import {
   recordCursorFailure,
 } from "@/lib/cursor-health";
 import { REPAIR_MAX_PAGES } from "@/lib/repair";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export interface SyncResult {
   added: number;
@@ -48,7 +49,7 @@ function mapTransactionRow(
   accountDbId: string,
   txn: Transaction,
 ) {
-  return {
+  const row = {
     user_id: userId,
     account_id: accountDbId,
     plaid_transaction_id: txn.transaction_id,
@@ -67,6 +68,12 @@ function mapTransactionRow(
     pfc_detailed: txn.personal_finance_category?.detailed ?? null,
     payment_channel: txn.payment_channel ?? null,
     pending: txn.pending ?? false,
+  };
+  if (!isFeatureEnabled("transactionTimes")) return row;
+  return {
+    ...row,
+    datetime: txn.datetime ?? null,
+    authorized_datetime: txn.authorized_datetime ?? null,
   };
 }
 

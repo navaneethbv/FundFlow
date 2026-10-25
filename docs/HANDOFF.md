@@ -5,6 +5,13 @@ PRs #225 and #226 merged on October 13, 2026; their pre-merge branch description
 Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
 A recorded deployment or local test result does not verify a later production build.
 
+## 2026-10-25: Bill search
+
+Adds `/transactions/search` and `lib/bill-search.ts`: a name or exact-amount lookup that returns date, time, provider, total, and the paying card, with every query filtered on `user_id`.
+Plaid's optional time of day is stored by the new `20261025090000_transaction_datetime.sql` behind the `transactionTimes` flag; rollout order is in [the tracker](TODO.md#bill-search-and-transaction-times-2026-10-25).
+Local validation: typecheck, lint, production build with placeholder public configuration, and the full unit suite passed.
+Minor and patch dependency bumps were applied; the `eslint` 10, `typescript` 7, `plaid` 49 and `@anthropic-ai/sdk` 1.x majors stay deferred for compatibility work.
+
 ## 2026-10-13: Planning PR quality follow-up
 
 PR #226 replaces non-null assertions with narrowed/checked values and splits decimal validation into whole/fraction checks. The Sonar follow-up adds explicit alphabetical currency comparison, stable schedule/ladder keys, unambiguous input labels, and clearer test/error conventions. Focused validation passes 74 unit tests, six mobile/desktop browser tests, lint, and typecheck. The preceding full-suite results below remain the baseline; hosted checks validate the updated commit.
