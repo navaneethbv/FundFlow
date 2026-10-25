@@ -4,6 +4,14 @@ Source status checked October 16, 2026.
 Dated deployment, migration, and verification entries below describe their recorded checkpoints; they do not verify the current production environment.
 Remaining live acceptance and feature-flag decisions stay separate from a merged implementation.
 
+## Bill search and transaction times, 2026-10-25
+
+`/transactions/search` (linked as "Find a bill" from the ledger header) finds a transaction by provider name or exact amount and shows date, time, provider, total, and the card or account that paid it.
+It reads existing columns and needs no rollout step.
+The time of day needs `20261025090000_transaction_datetime.sql`, which is unapplied to production.
+Apply it first, then set `FUNDFLOW_FEATURE_FLAGS=transactionTimes`: with the flag on, sync writes `datetime`/`authorized_datetime`, so enabling it before the migration fails every sync.
+Existing rows stay without a time until Plaid resends them; only institutions that report a time ever fill it.
+
 ## Merged budget, goal, and debt planning, 2026-10-13
 
 [PR #226](https://github.com/navaneethbv/FundFlow/pull/226) merged the [15 planning features](superpowers/specs/2026-10-13-budget-goal-debt-planning.md) on October 13.

@@ -199,6 +199,13 @@ export const FEATURE_FLAG_DEFAULTS = {
   privateLending: false,
   /** Reference adoption 8.4: editable rent-buy, emergency-fund, and compound tools. */
   planningCalculators: false,
+  /**
+   * Plaid time of day on transactions. Requires
+   * `20261025090000_transaction_datetime.sql`: with it on, sync writes
+   * `datetime`/`authorized_datetime` and bill search reads them, so turning it
+   * on before the migration is applied would fail every sync.
+   */
+  transactionTimes: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

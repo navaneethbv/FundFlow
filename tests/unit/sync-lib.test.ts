@@ -554,6 +554,55 @@ describe("lib/sync", () => {
       );
     });
 
+    it.each([
+      [undefined, false],
+      ["transactionTimes", true],
+    ])("writes Plaid times only when the flag is %s", async (flags, writesTimes) => {
+      vi.stubEnv("FUNDFLOW_FEATURE_FLAGS", flags ?? "");
+      mockTransactionsSync.mockResolvedValueOnce({
+        data: {
+          added: [{
+            account_id: "plaid-acc-1",
+            transaction_id: "txn-time",
+            amount: 12,
+            date: "2026-07-28",
+            datetime: "2026-07-28T18:42:00Z",
+            authorized_datetime: "2026-07-27T23:10:00Z",
+            merchant_name: "Cafe",
+          }],
+          modified: [],
+          removed: [],
+          accounts: [],
+          next_cursor: "cursor-next",
+          has_more: false,
+        },
+      });
+      const upsertTxns = vi.fn().mockResolvedValue({ error: null });
+      const maybeSingleAlert = vi.fn().mockResolvedValue({ data: null });
+      const selectAlert = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: maybeSingleAlert }) });
+      const selectCancelled = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null }) });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "transactions") return { upsert: upsertTxns };
+        if (table === "alert_preferences") return { select: selectAlert };
+        if (table === "cancelled_subscriptions") return { select: selectCancelled };
+        throw new Error(`Unexpected table ${table}`);
+      });
+
+      try {
+        await syncItemTransactions(dummyItem);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+
+      const [[rows]] = upsertTxns.mock.calls as [[Array<Record<string, unknown>>]];
+      if (writesTimes) {
+        expect(rows[0]).toMatchObject({ datetime: "2026-07-28T18:42:00Z", authorized_datetime: "2026-07-27T23:10:00Z" });
+      } else {
+        expect(rows[0]).not.toHaveProperty("datetime");
+        expect(rows[0]).not.toHaveProperty("authorized_datetime");
+      }
+    });
+
     it("throws when deleting removed transactions fails", async () => {
       mockTransactionsSync.mockResolvedValueOnce({
         data: {

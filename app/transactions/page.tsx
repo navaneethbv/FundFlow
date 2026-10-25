@@ -438,6 +438,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
             <>
               {isFeatureEnabled("merchantsPage") && <ButtonLink href="/merchants" variant="secondary">Merchants</ButtonLink>}
               {isFeatureEnabled("bayesCategorization") && <BayesCategorizeButton />}
+              <ButtonLink href="/transactions/search" variant="secondary">
+                Find a bill
+              </ButtonLink>
               <ButtonLink href="/transactions/receipts" variant="secondary">
                 Receipts
               </ButtonLink>
