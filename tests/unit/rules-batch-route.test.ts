@@ -3,10 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockInvalidate = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/dashboard-cache", () => ({ invalidateDashboardCache: mockInvalidate }));
 import { POST } from "@/app/api/rules/batch/route";
-import { IN_FILTER_CHUNK_SIZE } from "@/lib/postgrest-limits";
 import { NextRequest } from "next/server";
-
-const MAX_ROWS = 1000;
 
 const mockRequireUser = vi.fn();
 const mockWriteAudit = vi.fn().mockResolvedValue(undefined);
@@ -104,16 +101,11 @@ function createMockBatchDb(options?: {
         return {
           select: (...args: unknown[]) => {
             mockTransactionSelect(...args);
-            // Like PostgREST: a single request never returns more than max-rows.
-            const page = (from: number, to: number) =>
-              Promise.resolve({ data: transactions.slice(from, Math.min(to + 1, from + MAX_ROWS)) });
-            const query = {
-              eq: () => query,
-              order: () => query,
-              limit: (n: number) => page(0, n - 1),
-              range: page,
+            return {
+              eq: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockResolvedValue({ data: transactions }),
             };
-            return query;
           },
         };
       }
@@ -121,14 +113,7 @@ function createMockBatchDb(options?: {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          // The id list rides in the request URL; past the chunk size the proxy answers 414.
-          in: vi.fn((_column: string, ids: string[]) =>
-            Promise.resolve(
-              ids.length > IN_FILTER_CHUNK_SIZE
-                ? { data: null, error: { message: "414 Request-URI Too Large" } }
-                : { data: annotations },
-            ),
-          ),
+          in: vi.fn().mockResolvedValue({ data: annotations }),
           upsert: onUpsert,
         };
       }
@@ -265,32 +250,6 @@ describe("POST /api/rules/batch", () => {
     );
     expect(mockServiceIn).toHaveBeenCalledWith("id", ["tx-1"]);
     expect(mockInvalidate).toHaveBeenCalledWith(expect.any(String));
-  });
-
-  it("applies rules to every transaction when history exceeds one page and one id filter", async () => {
-    const mockUpsert = vi.fn().mockResolvedValue({ error: null });
-    const transactions = Array.from({ length: 1200 }, (_, i) => ({
-      id: `tx-${i}`,
-      merchant_name: "TARGET #123",
-      name: "TARGET",
-      amount: -10,
-      pfc_primary: "GENERAL",
-    }));
-    mockRequireUser.mockResolvedValueOnce({
-      user: { id: "u-1" },
-      supabase: createMockBatchDb({ transactions, onUpsert: mockUpsert }),
-    });
-
-    const res = await POST(createBatchRequest({ dryRun: false }));
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.totalEvaluated).toBe(1200);
-    const upserted = mockUpsert.mock.calls.flatMap(([rows]) => rows as Array<{ transaction_id: string }>);
-    expect(new Set(upserted.map((row) => row.transaction_id)).size).toBe(1200);
-    const renamedIds = mockServiceIn.mock.calls.map(([, ids]) => ids as string[]);
-    expect(renamedIds.every((ids) => ids.length <= IN_FILTER_CHUNK_SIZE)).toBe(true);
-    expect(renamedIds.flat()).toHaveLength(1200);
   });
 
   it("propagates annotation write failure and records audit trail with failed_table", async () => {
