@@ -7,6 +7,9 @@ import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { createServiceClient } from "@/lib/supabase/service";
+import { loadPagedRows } from "@/lib/export";
+import { DEPENDENCY_CONCURRENCY, runBatched } from "@/lib/finance-query";
+import { chunkValues } from "@/lib/postgrest-limits";
 import {
   simulateRulesBatch,
   type SmartRule,
@@ -73,36 +76,40 @@ async function fetchCandidateTransactions(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<RuleTransactionCandidate[] | Response> {
-  const { data: txns, error: txError } = await supabase
-    .from("transactions")
-    .select("id, merchant_name, name, amount, pfc_primary")
-    .eq("user_id", userId)
-    .order("date", { ascending: false })
-    // Rules run retroactively on history, so cover a large window; pagination
-    // is avoided to keep the batch evaluation a single atomic simulation.
-    .limit(5000);
-
-  if (txError) {
+  // Rules run retroactively on all history. Paged, because PostgREST caps one
+  // response at max-rows; the simulation below still runs once over the full set.
+  let typedTxns: DbTransaction[];
+  try {
+    typedTxns = await loadPagedRows<DbTransaction>((from, to) =>
+      supabase
+        .from("transactions")
+        .select("id, merchant_name, name, amount, pfc_primary")
+        .eq("user_id", userId)
+        .order("date", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    );
+  } catch (txError) {
     return errorResponse("rules.batch.fetchTransactions", txError);
   }
 
-  const typedTxns = (txns || []) as unknown as DbTransaction[];
-  const txnIds = typedTxns.map((t) => t.id);
   const annotationsMap = new Map<string, string[]>();
-
-  if (txnIds.length > 0) {
-    const { data: annotations, error: annotationsError } = await supabase
-      .from("transaction_annotations")
-      .select("transaction_id, tags")
-      .eq("user_id", userId)
-      .in("transaction_id", txnIds);
-
+  // Chunked: the id list goes in the request URL (see lib/postgrest-limits.ts).
+  const annotationPages = await runBatched(
+    chunkValues(typedTxns.map((t) => t.id)).map((ids) => () =>
+      supabase
+        .from("transaction_annotations")
+        .select("transaction_id, tags")
+        .eq("user_id", userId)
+        .in("transaction_id", ids),
+    ),
+    DEPENDENCY_CONCURRENCY,
+  );
+  for (const { data: annotations, error: annotationsError } of annotationPages) {
     if (annotationsError) {
       return errorResponse("rules.batch.fetchAnnotations", annotationsError);
     }
-
-    const typedAnnotations = (annotations || []) as unknown as DbAnnotation[];
-    for (const a of typedAnnotations) {
+    for (const a of (annotations || []) as unknown as DbAnnotation[]) {
       if (Array.isArray(a.tags)) {
         annotationsMap.set(a.transaction_id, a.tags);
       }
@@ -190,11 +197,15 @@ async function applyBatchLivePersistence(
     }
 
     for (const [newMerchant, ids] of byMerchant.entries()) {
-      const { error: merchantError } = await service
-        .from("transactions")
-        .update({ merchant_name: newMerchant, updated_at: new Date().toISOString() })
-        .in("id", ids)
-        .eq("user_id", userId);
+      let merchantError: unknown = null;
+      for (const idChunk of chunkValues(ids)) {
+        ({ error: merchantError } = await service
+          .from("transactions")
+          .update({ merchant_name: newMerchant, updated_at: new Date().toISOString() })
+          .in("id", idChunk)
+          .eq("user_id", userId));
+        if (merchantError) break;
+      }
 
       if (merchantError) {
         await writeAudit({
