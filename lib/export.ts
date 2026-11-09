@@ -19,7 +19,8 @@ function assertExportQuery(result: ExportQueryResult): void {
   if (result.error) throw result.error;
 }
 
-async function loadPagedRows<T>(
+/** Read every row of a query one max-rows page at a time; throws the first page error. */
+export async function loadPagedRows<T>(
   loadPage: (from: number, to: number) => PromiseLike<ExportQueryResult>,
 ): Promise<T[]> {
   const rows: T[] = [];
