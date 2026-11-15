@@ -4,6 +4,19 @@ Source status checked October 16, 2026.
 Dated deployment, migration, and verification entries below describe their recorded checkpoints; they do not verify the current production environment.
 Remaining live acceptance and feature-flag decisions stay separate from a merged implementation.
 
+## Current review: repository review, 2026-11-15
+
+[The review](reviews/2026-11-15-repository-review.md) covers `main` at `37908d5`; lint, typecheck, the unit suite, and the palette validator passed, and nothing was run against live services.
+It records four P1 defects, eleven P2 gaps, and a P3 list, none fixed yet.
+
+- P1-1: a transient sync failure sets a bank item to `error`, and the cron and Refresh then skip it.
+- P1-2: account deletion does not remove `error`-state items at Plaid.
+- P1-3: the daily digest only includes notifications created between UTC midnight and the 07:00 UTC cron.
+- P1-4: `writeAudit` ignores the insert result, so a rejected audit row is neither stored nor logged.
+- 63 of 75 feature flags default to off with no exit criterion; the review proposes a triage.
+
+The review's "Recommended order of work" section sizes these into ten PRs; two of them add migrations.
+
 ## Bill search and transaction times, 2026-10-25
 
 `/transactions/search` (linked as "Find a bill" from the ledger header) finds a transaction by provider name or exact amount and shows date, time, provider, total, and the card or account that paid it.

@@ -5,6 +5,15 @@ PRs #225 and #226 merged on October 13, 2026; their pre-merge branch description
 Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
 A recorded deployment or local test result does not verify a later production build.
 
+## 2026-11-15: Repository review
+
+Documentation only: adds [the 2026-11-15 review](reviews/2026-11-15-repository-review.md) and a pointer in [the tracker](TODO.md#current-review-repository-review-2026-11-15).
+No source, migration, flag, dependency, or production state changed.
+Local gates on `main` at `37908d5`: typecheck, lint, palette validation, and the unit suite (579 files, 6,462 tests) passed; `npm audit --audit-level=high` passed with eight dev-only moderate advisories below the threshold.
+The production build, Playwright, and the integration suite were not run.
+`npx npm-check-updates` found six patch, six minor, and four major updates (`eslint` 10, `typescript` 7, `plaid` 51, `web-push` 4); none were applied so the gate results describe `main` unchanged.
+`graphify` is not installed in this environment, so the graph was neither queried nor updated.
+
 ## 2026-10-25: Bill search
 
 Adds `/transactions/search` and `lib/bill-search.ts`: a name or exact-amount lookup that returns date, time, provider, total, and the paying card, with every query filtered on `user_id`.
