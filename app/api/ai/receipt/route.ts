@@ -8,7 +8,8 @@ import {
 import { resolveAiConsent } from "@/lib/ai-gate";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { readFormBody } from "@/lib/request-body";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { runMeteredAiRequest } from "@/lib/ai-request";
+import { isValidDateKey } from "@/lib/date-utils";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { findReceiptCandidates, receiptAmountBandFilter } from "@/lib/receipts";
 
@@ -29,7 +30,7 @@ async function matchReceiptTransaction(
   userId: string,
   extracted: ExtractedReceiptData,
 ): Promise<string | null> {
-  if (extracted.amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(extracted.date)) {
+  if (extracted.amount <= 0 || !isValidDateKey(extracted.date)) {
     return null;
   }
 
@@ -103,13 +104,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allowed = await checkRateLimit(`ai-receipt:${user.id}`, 10, 24 * 3600, {
-      failClosed: true,
-    });
-    if (!allowed) {
-      return NextResponse.json({ error: "Daily scan limit reached." }, { status: 429 });
-    }
-
     // Include multipart metadata while retaining the separate 5 MiB file limit.
     const form = await readFormBody(request, 6 * 1024 * 1024);
     if (form instanceof NextResponse) return form;
@@ -121,10 +115,9 @@ export async function POST(request: NextRequest) {
 
     const data = Buffer.from(await file.arrayBuffer()).toString("base64");
 
-    const extractionResult = await extractReceiptWithProvider({
-      fileBase64: data,
-      mediaType,
-    });
+    const extractionResult = await runMeteredAiRequest("receipt", user.id, () =>
+      extractReceiptWithProvider({ fileBase64: data, mediaType }));
+    if (extractionResult instanceof NextResponse) return extractionResult;
 
     if (extractionResult.refusal || !extractionResult.extracted) {
       return NextResponse.json({ error: "The image could not be processed." }, { status: 422 });

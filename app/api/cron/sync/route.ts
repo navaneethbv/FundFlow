@@ -1,3 +1,5 @@
+import { withCronDelivery } from "@/lib/cron-delivery";
+import { bankIdFromBrokenBankSubject, brokenBankDetails, requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import { INSIGHT_TYPES } from "@/lib/insight-types";
 import { pruneOperationalData } from "@/lib/operational-retention";
 import { NextResponse, type NextRequest } from "next/server";
@@ -50,48 +52,70 @@ async function sendDailyDigest(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
 ): Promise<void> {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const through = now.toISOString();
   try {
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const [{ data: profile, error: profileError }, { data: todayNotifications, error: notificationError }] =
-      await Promise.all([
-        service
-          .from("profiles")
-          .select("daily_digest_email_enabled")
-          .eq("id", userId)
-          .maybeSingle(),
-        service
-          .from("notifications")
-          .select("type, title, body")
-          .eq("user_id", userId)
-          .gte("created_at", todayStart.toISOString()),
-      ]);
+    const { data: profile, error: profileError } = await service.from("profiles")
+      .select("daily_digest_email_enabled").eq("id", userId).maybeSingle();
     if (profileError) throw profileError;
-    if (notificationError) throw notificationError;
-    const digestNotifications =
-      profile?.daily_digest_email_enabled === false
-        ? (todayNotifications ?? []).filter((notification) => notification.type === "broken_bank")
-        : (todayNotifications ?? []).filter(notification => notification.type !== "rule_match" && !(INSIGHT_TYPES as readonly string[]).includes(notification.type));
-    if (digestNotifications.length === 0) return;
-    // Checked (A-13): a failed user lookup must surface, never silently
-    // skip one user's digest while reporting success.
-    const { data: userData, error: userError } = await service.auth.admin.getUserById(userId);
-    if (userError) throw userError;
-    const email = userData?.user?.email;
-    if (!email) return;
-    await sendDailyDigestEmail(
-      email,
-      digestNotifications,
-      new Date().toISOString().slice(0, 10),
-      `${serverEnv.appUrl ?? "http://localhost:3000"}/notifications`,
-    );
-  } catch (error) {
-    logError("cron.sync.digest", error);
-    if (error instanceof Error && error.message.includes("SMTP is not configured")) {
-      await alertCronFailure("digest-delivery", {
-        failed: 1, total: 1, firstError: "SMTP_NOT_CONFIGURED",
+
+    await withCronDelivery(service, `digest:${userId}`, userId, todayStart.toISOString(), async (previous) => {
+      const floor = new Date(now.getTime() - 48 * 3600_000).toISOString();
+      // Use the durable high-water mark, with a bounded catch-up window.
+      const since = previous && previous > floor ? previous : floor;
+      const notifications = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await service.from("notifications")
+          .select("type, title, body, subject_key").eq("user_id", userId)
+          .gt("created_at", since).lte("created_at", through)
+          .order("created_at").order("id").range(offset, offset + 999);
+        if (error) throw error;
+        const rows = data ?? [];
+        notifications.push(...rows.filter((row) => profile?.daily_digest_email_enabled === false
+          ? row.type === "broken_bank"
+          : row.type !== "rule_match" && !(INSIGHT_TYPES as readonly string[]).includes(row.type)));
+        if (rows.length < 1000) break;
+      }
+      const itemIds = [...new Set(notifications
+        .filter((row) => row.type === "broken_bank")
+        .map((row) => bankIdFromBrokenBankSubject(row.subject_key))
+        .filter((id): id is string => id !== null))];
+      const currentIssues = new Map<string, ReturnType<typeof brokenBankDetails>>();
+      for (let offset = 0; offset < itemIds.length; offset += 100) {
+        const { data, error } = await service.from("plaid_items")
+          .select("id, institution_name, error_code").eq("user_id", userId).eq("status", "error")
+          .in("id", itemIds.slice(offset, offset + 100));
+        if (error) throw error;
+        for (const item of data ?? []) {
+          if (requiresPlaidUserAction(item.error_code)) currentIssues.set(item.id, brokenBankDetails(item.institution_name, item.error_code));
+        }
+      }
+      const bankAlertsSeen = new Set<string>();
+      const deliverable = notifications.flatMap(({ type, title, body, subject_key }) => {
+        if (type !== "broken_bank") return [{ type, title, body }];
+        const itemId = bankIdFromBrokenBankSubject(subject_key);
+        if (itemId === null || bankAlertsSeen.has(itemId)) return [];
+        const issue = currentIssues.get(itemId);
+        if (!issue) return [];
+        bankAlertsSeen.add(itemId);
+        return [{ type, ...issue }];
       });
+      if (deliverable.length === 0) return null;
+      const { data: userData, error: userError } = await service.auth.admin.getUserById(userId);
+      if (userError) throw userError;
+      const email = userData?.user?.email;
+      if (!email) return null;
+      await sendDailyDigestEmail(email, deliverable, through.slice(0, 10),
+        `${serverEnv.appUrl ?? "http://localhost:3000"}/notifications`);
+      return through;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("SMTP is not configured")) {
+      await alertCronFailure("digest-delivery", { failed: 1, total: 1, firstError: "SMTP_NOT_CONFIGURED" });
     }
+    throw error;
   }
 }
 
@@ -129,10 +153,12 @@ async function syncUser(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
   hasBank: boolean,
+  deadline: number,
 ): Promise<string[]> {
   const stepFailures: string[] = [];
   if (hasBank) {
-    try { await syncAllForUser(userId); } catch (error) { logError("cron.sync.bank", error); stepFailures.push(safeSyncError(error)); }
+    try { await syncAllForUser(userId, deadline); } catch (error) { logError("cron.sync.bank", error); stepFailures.push(safeSyncError(error)); }
+    if (Date.now() >= deadline) return [...stepFailures, "DEADLINE_EXCEEDED"];
     await runOptionalSync("cron.sync.token-rotation", () => rotateStaleItemTokens(userId));
   }
   // One clock per user for the whole run (M-11): daily snapshots, the
@@ -194,24 +220,28 @@ async function syncUsers(
   bankUserIds: Set<string>,
   deadline: number,
 ): Promise<{ synced: number; failures: string[]; skipped: number }> {
+  let next = 0;
   let synced = 0;
   const failures: string[] = [];
-  let skipped = 0;
-  for (const userId of userIds) {
-    if (Date.now() >= deadline) {
-      skipped = userIds.length - userIds.indexOf(userId);
-      failures.push(`DEADLINE_EXCEEDED: ${skipped} users skipped`);
-      break;
-    }
-    try {
-      const userFailures = await syncUser(service, userId, bankUserIds.has(userId));
-      if (userFailures.length) failures.push(userFailures.join("; "));
-      else synced += 1;
-    } catch (error) {
-      logError("cron.sync.user", error);
-      failures.push(safeSyncError(error));
+  async function worker() {
+    while (next < userIds.length && Date.now() < deadline) {
+      const userId = userIds[next++]!;
+      try {
+        const userFailures = await syncUser(service, userId, bankUserIds.has(userId), deadline);
+        const { error } = await service.from("profiles")
+          .update({ last_maintenance_at: new Date().toISOString() }).eq("id", userId);
+        if (error) userFailures.push(`cron.sync.maintenance-stamp: ${safeSyncError(error)}`);
+        if (userFailures.length) failures.push(userFailures.join("; "));
+        else synced += 1;
+      } catch (error) {
+        logError("cron.sync.user", error);
+        failures.push(safeSyncError(error));
+      }
     }
   }
+  await Promise.all([worker(), worker()]);
+  const skipped = userIds.length - next;
+  if (skipped) failures.push(`DEADLINE_EXCEEDED: ${skipped} users skipped`);
   return { synced, failures, skipped };
 }
 
@@ -233,7 +263,13 @@ export async function GET(request: NextRequest) {
       .eq("status", "active");
     if (error) throw error;
 
+    const { data: legacyErrors, error: legacyError } = await service
+      .from("plaid_items").select("user_id, error_code").eq("status", "error");
+    if (legacyError) throw legacyError;
     const bankUserIds = new Set((data ?? []).map((r) => r.user_id as string));
+    for (const item of legacyErrors ?? []) {
+      if (item.error_code && !requiresPlaidUserAction(item.error_code)) bankUserIds.add(item.user_id as string);
+    }
     const userIds = await loadMaintenanceUsers(service, bankUserIds);
     const { synced, failures, skipped } = await syncUsers(service, userIds, bankUserIds, deadline);
 

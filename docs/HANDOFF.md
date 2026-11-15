@@ -5,6 +5,12 @@ PRs #225 and #226 merged on October 13, 2026; their pre-merge branch description
 Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
 A recorded deployment or local test result does not verify a later production build.
 
+## 2026-11-15: Repository review follow-up
+
+The remediation adds recoverable Plaid sync failures, update-mode prompts for reconnect and new accounts, provider cleanup ahead of storage deletion, durable digest and cron-alert delivery windows, fair maintenance ordering, checked audit writes, and AI timeout, quota and retention controls. It also pins CI and updates local tooling, moves the read-only aggregates endpoint to `/api/v1/aggregates`, fixes the rent-versus-buy and zero-balance debt calculations, and reviews the dark flag backlog.
+
+The migration and owner acceptance gates are listed in [the tracker](TODO.md#current-review-repository-review-2026-11-15). The migration was exercised against an embedded PostgreSQL instance with a minimal schema and service-role privileges. Live Supabase, bank authentication, email delivery, and the separate major dependency upgrades require their own verification.
+
 ## 2026-11-15: Repository review
 
 Documentation only: adds [the 2026-11-15 review](reviews/2026-11-15-repository-review.md) and a pointer in [the tracker](TODO.md#current-review-repository-review-2026-11-15).
@@ -19,7 +25,7 @@ The production build, Playwright, and the integration suite were not run.
 Adds `/transactions/search` and `lib/bill-search.ts`: a name or exact-amount lookup that returns date, time, provider, total, and the paying card, with every query filtered on `user_id`.
 Plaid's optional time of day is stored by the new `20261025090000_transaction_datetime.sql` behind the `transactionTimes` flag; rollout order is in [the tracker](TODO.md#bill-search-and-transaction-times-2026-10-25).
 Local validation: typecheck, lint, production build with placeholder public configuration, and the full unit suite passed.
-Minor and patch dependency bumps were applied; the `eslint` 10, `typescript` 7, `plaid` 49 and `@anthropic-ai/sdk` 1.x majors stay deferred for compatibility work.
+Minor and patch dependency bumps were applied; that checkpoint deferred ESLint 10 and TypeScript 7 for compatibility. Current major-version decisions are tracked in Dependabot configuration.
 
 ## 2026-10-13: Planning PR quality follow-up
 

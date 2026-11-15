@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { CountryCode } from "plaid";
 import { errorResponse } from "@/lib/http";
-import { setItemStatus, updateItemBranding, decryptItemToken } from "@/lib/plaid-service";
+import { setItemStatus, setNewAccountsAvailable, updateItemBranding, decryptItemToken } from "@/lib/plaid-service";
 import { requireOwnedItem } from "@/lib/plaid-item-route";
 import { syncItemTransactions } from "@/lib/sync";
 import { writeAudit, getClientIp } from "@/lib/audit";
@@ -30,7 +30,13 @@ export async function POST(request: NextRequest) {
     // place, it doesn't mint a new one), so a failure here means the item is
     // gone at Plaid or the token is unusable.
     try {
-      await getPlaidClient().itemGet({ access_token: decryptItemToken(item) });
+      const { data } = await getPlaidClient().itemGet({ access_token: decryptItemToken(item) });
+      if (data.item?.error) {
+        return NextResponse.json(
+          { error: "The bank still requires authorization. Reopen Plaid Link to finish reconnecting." },
+          { status: 409 },
+        );
+      }
     } catch (error) {
       logError("plaid.reconnect.itemGet", error);
       return NextResponse.json(
@@ -40,6 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     await setItemStatus(item.user_id, item.id, "active", null);
+    if (item.new_accounts_available) await setNewAccountsAvailable(user.id, item.id, false);
 
     if (item.institution_id) {
       const branding = await fetchInstitutionBranding(getPlaidClient(), {
@@ -62,7 +69,7 @@ export async function POST(request: NextRequest) {
     // Catch up right away; if Plaid still needs a moment, the daily cron
     // (or the webhook) finishes the job.
     try {
-      await syncItemTransactions({ ...item, status: "active" });
+      await syncItemTransactions({ ...item, status: "active", error_code: null });
     } catch (error) {
       logError("plaid.reconnect.sync", error);
     }

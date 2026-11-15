@@ -21,7 +21,7 @@ vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: (...args: unknown[]) => moc
 vi.mock("@/lib/audit", () => ({ getClientIp: () => "127.0.0.1", writeAudit: (...args: unknown[]) => mockAudit(...args) }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => serviceClient }));
 
-import { GET, POST } from "@/app/api/mcp/route";
+import { GET, POST } from "@/app/api/v1/aggregates/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -43,16 +43,16 @@ beforeEach(() => {
   mockFetchRows.mockResolvedValue({ allowed: true, rows: [{ date: "2026-01-01", merchant: "Merchant", amount: 10, category: "Food" }] });
 });
 
-describe("/api/mcp", () => {
+describe("/api/v1/aggregates", () => {
   it("is unavailable while the endpoint flag is off", async () => {
-    const response = await GET(new NextRequest("http://localhost/api/mcp"));
+    const response = await GET(new NextRequest("http://localhost/api/v1/aggregates"));
     expect(response.status).toBe(404);
     expect(mockVerify).not.toHaveBeenCalled();
   });
 
   it("requires the aggregate scope and returns projections without row fields", async () => {
     enabled = true;
-    const response = await GET(new NextRequest("http://localhost/api/mcp?start=2026-01-01&end=2026-03-31", {
+    const response = await GET(new NextRequest("http://localhost/api/v1/aggregates?start=2026-01-01&end=2026-03-31", {
       headers: { authorization: "Bearer fft_token" },
     }));
     expect(response.status).toBe(200);
@@ -67,7 +67,7 @@ describe("/api/mcp", () => {
   it("keeps export rows as a separately granted scope", async () => {
     enabled = true;
     tokenScopes = ["mcp:aggregates"];
-    const refused = await POST(new NextRequest("http://localhost/api/mcp", {
+    const refused = await POST(new NextRequest("http://localhost/api/v1/aggregates", {
       method: "POST",
       headers: { authorization: "Bearer fft_token", "content-type": "application/json" },
       body: JSON.stringify({ resource: "rows", start: "2026-01-01", end: "2026-01-31" }),
@@ -75,7 +75,7 @@ describe("/api/mcp", () => {
     expect(refused.status).toBe(401);
 
     tokenScopes = ["mcp:export-rows"];
-    const allowed = await POST(new NextRequest("http://localhost/api/mcp", {
+    const allowed = await POST(new NextRequest("http://localhost/api/v1/aggregates", {
       method: "POST",
       headers: { authorization: "Bearer fft_token", "content-type": "application/json" },
       body: JSON.stringify({ resource: "rows", start: "2026-01-01", end: "2026-01-31" }),
@@ -87,7 +87,7 @@ describe("/api/mcp", () => {
 
   it("rejects invalid and overlong ranges before token use", async () => {
     enabled = true;
-    const response = await GET(new NextRequest("http://localhost/api/mcp?start=2026-01-01&end=2027-01-03"));
+    const response = await GET(new NextRequest("http://localhost/api/v1/aggregates?start=2026-01-01&end=2027-01-03"));
     expect(response.status).toBe(400);
     expect(mockVerify).not.toHaveBeenCalled();
   });
@@ -100,18 +100,18 @@ describe("/api/mcp", () => {
       "?start=2026-03-01&end=2026-02-01",
       `?start=2026-01-01&end=2026-03-31&category=${"x".repeat(81)}`,
     ]) {
-      expect((await GET(new NextRequest(`http://localhost/api/mcp${query}`))).status).toBe(400);
+      expect((await GET(new NextRequest(`http://localhost/api/v1/aggregates${query}`))).status).toBe(400);
     }
   });
 
   it("rejects malformed POST bodies before authentication", async () => {
     enabled = true;
-    const invalidJson = await POST(new NextRequest("http://localhost/api/mcp", {
+    const invalidJson = await POST(new NextRequest("http://localhost/api/v1/aggregates", {
       method: "POST",
       body: "not-json",
     }));
     expect(invalidJson.status).toBe(400);
-    const arrayBody = await POST(new NextRequest("http://localhost/api/mcp", {
+    const arrayBody = await POST(new NextRequest("http://localhost/api/v1/aggregates", {
       method: "POST",
       body: JSON.stringify([]),
     }));
@@ -121,15 +121,15 @@ describe("/api/mcp", () => {
   it("enforces IP and user rate limits and fails closed on token lookup errors", async () => {
     enabled = true;
     mockRateLimit.mockResolvedValueOnce(false);
-    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(429);
+    expect((await GET(new NextRequest("http://localhost/api/v1/aggregates", { headers: { authorization: "Bearer x" } }))).status).toBe(429);
 
     mockRateLimit.mockResolvedValue(true);
     mockRateLimit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(429);
+    expect((await GET(new NextRequest("http://localhost/api/v1/aggregates", { headers: { authorization: "Bearer x" } }))).status).toBe(429);
 
     mockRateLimit.mockResolvedValue(true);
     mockVerify.mockRejectedValueOnce(new Error("token service down"));
-    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(503);
+    expect((await GET(new NextRequest("http://localhost/api/v1/aggregates", { headers: { authorization: "Bearer x" } }))).status).toBe(503);
   });
 
   it("filters export rows and honors the export opt-out", async () => {
@@ -139,22 +139,22 @@ describe("/api/mcp", () => {
       { date: "2026-01-01", merchant: "Food shop", amount: 10, category: "Food" },
       { date: "2026-01-02", merchant: "Transit", amount: 5, category: "TRANSPORT" },
     ] });
-    const filtered = await GET(new NextRequest("http://localhost/api/mcp?resource=rows&category=food", { headers: { authorization: "Bearer x" } }));
+    const filtered = await GET(new NextRequest("http://localhost/api/v1/aggregates?resource=rows&category=food", { headers: { authorization: "Bearer x" } }));
     await expect(filtered.json()).resolves.toMatchObject({ rows: [{ merchant: "Food shop" }] });
 
     mockFetchRows.mockResolvedValue({ allowed: false });
-    const denied = await GET(new NextRequest("http://localhost/api/mcp?resource=rows", { headers: { authorization: "Bearer x" } }));
+    const denied = await GET(new NextRequest("http://localhost/api/v1/aggregates?resource=rows", { headers: { authorization: "Bearer x" } }));
     expect(denied.status).toBe(403);
   });
 
   it("returns explicit errors for projection and export failures", async () => {
     enabled = true;
     mockLoadProjection.mockRejectedValueOnce(new Error("projection down"));
-    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
+    expect((await GET(new NextRequest("http://localhost/api/v1/aggregates", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
 
     tokenScopes = ["mcp:export-rows"];
     mockFetchRows.mockRejectedValueOnce(new Error("export down"));
-    expect((await GET(new NextRequest("http://localhost/api/mcp?resource=rows", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
+    expect((await GET(new NextRequest("http://localhost/api/v1/aggregates?resource=rows", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
   });
 
   it("includes recurring and snapshot rows in aggregate projections", async () => {
@@ -165,7 +165,7 @@ describe("/api/mcp", () => {
       manual_recurring_items: { data: [{ amount: 7, frequency: "weekly", category: null, item_type: "expense", enabled: true }] },
       net_worth_snapshots: { data: [{ snapshot_month: "2026-01-01", assets: "100", liabilities: "25" }] },
     });
-    const response = await GET(new NextRequest("http://localhost/api/mcp?start=2026-01-01&end=2026-03-31", { headers: { authorization: "Bearer x" } }));
+    const response = await GET(new NextRequest("http://localhost/api/v1/aggregates?start=2026-01-01&end=2026-03-31", { headers: { authorization: "Bearer x" } }));
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       budgets: [{ category: "UNCATEGORIZED", monthlyLimit: 0 }],
@@ -179,6 +179,6 @@ describe("/api/mcp", () => {
   it("returns 500 when an aggregate dependency query fails", async () => {
     enabled = true;
     serviceClient = clientStub({ budgets: { data: [], error: { message: "budgets down" } } });
-    expect((await GET(new NextRequest("http://localhost/api/mcp", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
+    expect((await GET(new NextRequest("http://localhost/api/v1/aggregates", { headers: { authorization: "Bearer x" } }))).status).toBe(500);
   });
 });

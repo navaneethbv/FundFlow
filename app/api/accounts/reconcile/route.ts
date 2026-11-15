@@ -1,3 +1,4 @@
+import { isValidDateKey } from "@/lib/date-utils";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -7,20 +8,15 @@ import { invalidateDashboardCache } from "@/lib/dashboard-cache";
 import { parseAccountRef } from "@/lib/reconcile";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function validDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
 function validMoney(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 999999999999.99;
 }
 function parseInput(body: Record<string, unknown>) {
   const ref = parseAccountRef(body.account);
-  if (!ref || !UUID.test(ref.id) || !validDate(body.statement_date)) return null;
+  if (!ref || !UUID.test(ref.id) || !isValidDateKey(body.statement_date)) return null;
   const openingDate = body.opening_date ?? null;
   const openingBalance = body.opening_balance ?? null;
-  if (openingDate !== null && !validDate(openingDate)) return null;
+  if (openingDate !== null && !isValidDateKey(openingDate)) return null;
   if (openingBalance !== null && !validMoney(openingBalance)) return null;
   if ((openingDate === null) !== (openingBalance === null)) return null;
   return { p_source: ref.source, p_account_id: ref.id, p_statement_date: body.statement_date,

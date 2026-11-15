@@ -1,3 +1,10 @@
+/** An exact YYYY-MM-DD Gregorian calendar date. */
+export function isValidDateKey(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000-")) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && isoDate(date) === value;
+}
+
 export function parseDate(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   // c8 ignore next -- value.split("-") always yields at least one element

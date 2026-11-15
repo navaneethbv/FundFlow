@@ -101,7 +101,7 @@ describe("/accounts page", () => {
     ).toBe(false);
   });
 
-  it("resolves institution metadata via the household-safe RPC, not owner-scoped plaid_items", async () => {
+  it("resolves institution metadata via the household-safe RPC and scopes the new-account check", async () => {
     supabase = makeClient({
       households: { data: [{ id: "household-1" }] },
       accounts: { data: [] },
@@ -127,6 +127,6 @@ describe("/accounts page", () => {
 
     expect(supabase.rpc).toHaveBeenCalledWith("visible_institutions");
     // The page must not read plaid_items owner-scoped for shared accounts.
-    expect(supabase.callsOn("plaid_items")).toEqual([]);
+    expect(supabase.scopedToUser("plaid_items", "user-1")).toBe(true);
   });
 });

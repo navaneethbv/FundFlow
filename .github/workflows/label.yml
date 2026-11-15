@@ -21,6 +21,6 @@ jobs:
     # uses. The config is in v5+ form (label -> list of config options), which
     # v5, v6 and v7 all accept; the v4 form fails outright ("unexpected type
     # for label").
-    - uses: actions/labeler@v7
+    - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"

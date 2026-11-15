@@ -1,5 +1,6 @@
-import { processRuleAutomation } from "@/lib/compound-rule-service";
 import "server-only";
+import { processRuleAutomation } from "@/lib/compound-rule-service";
+import { brokenBankDetails, brokenBankSubjectKey, isPlaidReconnectWarning, requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import type { Transaction, RemovedTransaction, AccountBase } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -41,6 +42,7 @@ export interface SyncResult {
  * short enough that a crashed run doesn't stall the item for long.
  */
 const STALE_SYNC_SECONDS = 5 * 60;
+const ROUTINE_SYNC_BUDGET_MS = 180_000;
 
 const NOOP_RESULT: SyncResult = { added: 0, modified: 0, removed: 0 };
 
@@ -87,6 +89,7 @@ function mapTransactionRow(
  */
 export async function syncItemTransactions(
   item: PlaidItemRow,
+  deadline = Number.POSITIVE_INFINITY,
 ): Promise<SyncResult> {
   const supabase = createServiceClient();
 
@@ -101,14 +104,8 @@ export async function syncItemTransactions(
       p_stale_seconds: STALE_SYNC_SECONDS,
     },
   );
-  if (claimError) {
-    // Never let the guard break a sync: proceed, just without the claim.
-    logError("sync.claim", claimError);
-  } else if (claimed === false) {
-    // Another run owns this item right now — skip; it will persist the cursor.
-    return NOOP_RESULT;
-  }
-  const holdsClaim = !claimError && claimed === true;
+  if (claimError) logError("sync.claim", claimError);
+  if (claimError || claimed !== true) return NOOP_RESULT;
 
   try {
     // Record the attempt on the item row before touching Plaid, so a crashed
@@ -120,7 +117,7 @@ export async function syncItemTransactions(
       nowIso: new Date().toISOString(),
     }).catch((error) => logError("sync.cursor-attempt", error));
 
-    const outcome = await syncItemTransactionsInner(item, supabase);
+    const outcome = await syncItemTransactionsInner(item, supabase, deadline);
     const cursorRecord = {
       userId: item.user_id,
       itemDbId: item.id,
@@ -148,14 +145,11 @@ export async function syncItemTransactions(
     }).catch((failureError) => logError("sync.cursor-failure", failureError));
     throw error;
   } finally {
-    // Only release a claim we actually took — releasing on a claim error could
-    // clear a legitimate in-progress run's marker.
-    if (holdsClaim) {
-      try {
-        await supabase.rpc("release_item_sync", { p_item_id: item.id });
-      } catch (err) {
-        logError("sync.release", err);
-      }
+    try {
+      const { error } = await supabase.rpc("release_item_sync", { p_item_id: item.id });
+      if (error) logError("sync.release", error);
+    } catch (error) {
+      logError("sync.release", error);
     }
   }
 }
@@ -275,10 +269,11 @@ async function applyTransactionPage(
   data: TransactionSyncPage,
   notify: boolean,
   restart: boolean,
+  getAccountMap: (accountIds: string[]) => Promise<Map<string, string>>,
 ): Promise<SyncResult> {
   await upsertAccounts(item.user_id, item.id, data.accounts);
-  const accountMap = await getAccountIdMap(item.user_id);
   const changed = [...data.added, ...data.modified];
+  const accountMap = await getAccountMap(changed.map((txn) => txn.account_id));
   const missingAccount = changed.find((txn) => !accountMap.has(txn.account_id));
   if (missingAccount) {
     throw new Error(
@@ -307,9 +302,13 @@ async function applyTransactionPage(
     p_restart: restart,
   });
   if (finishError) throw finishError;
-  await processRuleAutomation(supabase, supabase, item.user_id, "sync", upsertRows.map(row => row.plaid_transaction_id));
+  // Automation and alerts run after the ledger write. Their failure cannot
+  // invalidate a committed page or prevent the sync cursor from advancing.
+  await processRuleAutomation(supabase, supabase, item.user_id, "sync", upsertRows.map(row => row.plaid_transaction_id))
+    .catch((error) => logError("sync.rule_automation", error));
   if (notify && upsertRows.length > 0) {
-    await notifySyncedTransactions(supabase, item.user_id, upsertRows);
+    await notifySyncedTransactions(supabase, item.user_id, upsertRows)
+      .catch((error) => logError("sync.transaction_notifications", error));
   }
   return {
     added: data.added.length,
@@ -319,11 +318,11 @@ async function applyTransactionPage(
 }
 
 interface TransactionSyncLoopOptions {
-  /** Hard page bound, or null to drain until `has_more` is false. */
+  /** Repair uses a page bound. Routine runs use a time budget. */
   maxPages: number | null;
+  deadline?: number;
   /** Emit large-transaction notifications for the rows applied. */
   notify: boolean;
-  mode: "routine" | "repair";
 }
 
 interface TransactionSyncLoopOutcome {
@@ -353,11 +352,9 @@ function nextTransactionCursor(
 
 async function recoverTransactionSyncError(
   item: PlaidItemRow,
-  mode: TransactionSyncLoopOptions["mode"],
   error: unknown,
 ): Promise<void> {
   if (
-    mode === "repair" &&
     plaidErrorCode(error) === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
   ) {
     await clearItemRepairCursor(item.user_id, item.id);
@@ -388,10 +385,8 @@ async function persistCompletedTransactionSyncCursor(
  *
  * Two rules from Plaid's pagination contract shape this loop:
  *
- * 1. The loop must run until `has_more` is false. A caller that stops early
- *    leaves the item behind by however many pages it skipped, so only the
- *    explicitly bounded repair path passes a `maxPages`; the routine sync
- *    passes null and drains.
+ * 1. Complete the chain when `has_more` is false. Repair has a page bound
+ *    and routine sync has a time budget. Both resume from a separate cursor.
  * 2. The committed cursor must stay the one the update chain *began* with
  *    until `has_more` is false. Bounded Repair runs keep their intermediate
  *    position in a separate repair cursor, so a mutation error can discard it
@@ -412,14 +407,15 @@ async function runTransactionSyncLoop(
   const plaid = getPlaidClient();
   const accessToken = await decryptItemTokenAndUpgrade(item);
 
-  if (options.mode === "routine" && item.repair_sync_started_at) {
-    await clearItemRepairCursor(item.user_id, item.id);
-  }
   const committedCursor = item.sync_cursor ?? undefined;
-  const startCursor =
-    options.mode === "repair" && item.repair_sync_started_at
-      ? (item.repair_sync_cursor ?? committedCursor)
-      : committedCursor;
+  const startCursor = item.repair_sync_cursor ?? committedCursor;
+  let accountMap: Map<string, string> | undefined;
+  async function getRunAccountMap(accountIds: string[]) {
+    if (!accountMap || accountIds.some((id) => !accountMap!.has(id))) {
+      accountMap = await getAccountIdMap(item.user_id);
+    }
+    return accountMap;
+  }
   let cursor = startCursor;
   let hasMore = true;
   let pagesCompleted = 0;
@@ -427,15 +423,17 @@ async function runTransactionSyncLoop(
 
   try {
     while (shouldFetchTransactionPage(hasMore, pagesCompleted, options.maxPages)) {
+      if (pagesCompleted > 0 && options.deadline !== undefined && Date.now() >= options.deadline) break;
       const response = await plaid.transactionsSync({
         access_token: accessToken,
         cursor,
+        count: 500,
         options: { include_original_description: true },
       });
       const data = response.data as TransactionSyncPage;
       // Finish these writes before the next page can replace or remove the same rows.
       const pageResult = await applyTransactionPage( // NOSONAR: S9382, page writes must remain ordered.
-        item, supabase, data, options.notify, pagesCompleted === 0 && startCursor === committedCursor,
+        item, supabase, data, options.notify, pagesCompleted === 0 && startCursor === committedCursor, getRunAccountMap,
       );
       result.added += pageResult.added;
       result.modified += pageResult.modified;
@@ -445,38 +443,41 @@ async function runTransactionSyncLoop(
       pagesCompleted += 1;
     }
   } catch (error) {
-    await recoverTransactionSyncError(item, options.mode, error);
+    await recoverTransactionSyncError(item, error);
     throw error;
   }
 
   if (hasMore) {
-    // Only a bounded Repair can exit with more pages. At least one page ran,
+    // A bounded run may exit with more pages. At least one page ran,
     // and nextTransactionCursor rejected an empty resumable cursor.
     await persistIncompleteRepairCursor(item, cursor!);
   } else {
     await persistCompletedTransactionSyncCursor(item, cursor, committedCursor);
   }
-  await setItemStatus(item.user_id, item.id, "active", null);
+  const warning = isPlaidReconnectWarning(item.error_code) ? item.error_code : null;
+  await setItemStatus(item.user_id, item.id, "active", warning, item);
   return { result, completed: !hasMore, pagesCompleted };
 }
 
 async function syncItemTransactionsInner(
   item: PlaidItemRow,
   supabase: ReturnType<typeof createServiceClient>,
+  deadline: number,
 ): Promise<{ result: SyncResult; completed: boolean }> {
   const { result, completed } = await runTransactionSyncLoop(item, supabase, {
     maxPages: null,
     notify: Boolean(item.sync_cursor),
-    mode: "routine",
+    deadline: Math.min(deadline, Date.now() + ROUTINE_SYNC_BUDGET_MS),
   });
   return { result, completed };
 }
 
 /** Pull the Plaid error code out of an Axios-shaped error, if there is one. */
 function plaidErrorCode(error: unknown): string | null {
-  const code = (error as { response?: { data?: { error_code?: unknown } } })
-    ?.response?.data?.error_code;
-  return typeof code === "string" ? code : null;
+  const details = error as { response?: { data?: { error_code?: unknown } }; error_code?: unknown } | null;
+  const code = details?.response?.data?.error_code ?? details?.error_code;
+  if (typeof code === "string" && /^[A-Z0-9_]{1,60}$/.test(code)) return code;
+  return null;
 }
 
 export interface RepairBackfillOptions {
@@ -554,7 +555,7 @@ async function backfillClaimedItemTransactions(
   const { result, completed, pagesCompleted } = await runTransactionSyncLoop(
     item,
     supabase,
-    { maxPages, notify: false, mode: "repair" },
+    { maxPages, notify: false },
   );
 
   const nowIso = new Date().toISOString();
@@ -635,35 +636,43 @@ async function recordJobEnd(
 }
 
 /** Sync every active item for a user. Per-item failures are isolated. */
-export async function syncAllForUser(userId: string): Promise<SyncResult> {
-  const items = await listActiveItems(userId);
+export async function syncAllForUser(userId: string, deadline = Number.POSITIVE_INFINITY): Promise<SyncResult> {
+  const items = await listActiveItems(userId, { retryTransient: true });
   const total: SyncResult = { added: 0, modified: 0, removed: 0 };
 
   for (const item of items) {
+    if (Date.now() >= deadline) break;
     const jobId = await recordJobStart(userId, item.id);
     try {
-      const result = await syncItemTransactions(item);
+      const result = await syncItemTransactions(item, deadline);
       total.added += result.added;
       total.modified += result.modified;
       total.removed += result.removed;
-      await recordJobEnd(jobId, userId, "done");
+      if (result === NOOP_RESULT) {
+        await recordJobEnd(jobId, userId, "failed", "SYNC_CLAIM_UNAVAILABLE");
+      } else {
+        await recordJobEnd(jobId, userId, "done");
+      }
     } catch (error) {
       logError("sync.item", error);
       // Keep the real Plaid code (e.g. ITEM_LOGIN_REQUIRED) so Settings can
       // offer the right fix (reconnect) instead of a generic failure.
       const code = plaidErrorCode(error) ?? "sync_failed";
-      await setItemStatus(item.user_id, item.id, "error", code).catch(() => {});
+      const needsUserAction = requiresPlaidUserAction(code);
+      const statusCode = !needsUserAction && isPlaidReconnectWarning(item.error_code) ? item.error_code : code;
+      await setItemStatus(item.user_id, item.id, needsUserAction ? "error" : "active", statusCode, item)
+        .catch((statusError) => logError("sync.item-status", statusError));
       await recordJobEnd(jobId, userId, "failed", code);
+      if (!needsUserAction) continue;
 
-      // Emit broken bank/sync failure notification
+      const timezone = await loadAlertTimezone(createServiceClient(), userId);
+      const today = dateKeyInTimezone(new Date(), timezone);
       await createNotification(
         userId,
         "broken_bank",
-        {
-          title: `Bank connection issue: ${item.institution_name || "Bank"}`,
-          body: `The connection to ${item.institution_name || "your bank"} needs to be updated (error: ${code}).`,
-        },
-        item.id,
+        brokenBankDetails(item.institution_name, code),
+        brokenBankSubjectKey(item.id, today),
+        "exact",
       ).catch((err) => logError("sync.broken_bank_notification", err));
     }
   }

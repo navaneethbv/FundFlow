@@ -136,6 +136,7 @@ describe("POST /api/plaid/reconnect", () => {
     expect(mockSyncItemTransactions).toHaveBeenCalledWith({
       ...mockItem,
       status: "active",
+      error_code: null,
     });
     expect(mockWriteAudit).toHaveBeenCalledWith({
       userId: "u1",
@@ -143,6 +144,17 @@ describe("POST /api/plaid/reconnect", () => {
       metadata: { institution_name: "Chase" },
       ip: "127.0.0.1",
     });
+  });
+
+  it.each(["Discover", "Fidelity"])("keeps %s marked for reconnect if Plaid still reports login required", async (institution_name) => {
+    mockRequireUser.mockResolvedValue({ user: { id: "u1" } });
+    mockGetItem.mockResolvedValue({ id: "item-1", user_id: "u1", institution_name, status: "error" });
+    mockItemGet.mockResolvedValueOnce({ data: { item: { error: { error_code: "ITEM_LOGIN_REQUIRED" } } } });
+    const request = { json: async () => ({ item_id: "item-1" }) } as unknown as NextRequest;
+    const response = await POST(request);
+    expect(response.status).toBe(409);
+    expect(mockSetItemStatus).not.toHaveBeenCalled();
+    expect(mockSyncItemTransactions).not.toHaveBeenCalled();
   });
 
   it("proceeds successfully even if immediate sync throws an error", async () => {

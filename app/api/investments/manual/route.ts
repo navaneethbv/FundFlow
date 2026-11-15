@@ -1,3 +1,4 @@
+import { resolveViewerToday } from "@/lib/report-period";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => null);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await resolveViewerToday(supabase, user.id);
     const result = normalizeManualHolding(body, today);
     if (!result.ok) return badRequest(result.error);
     const input = result.value;

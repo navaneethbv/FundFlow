@@ -5,6 +5,7 @@ export async function pruneOperationalData(service: SupabaseClient, userId: stri
   const cutoff = (days: number) => new Date(now - days * 86_400_000).toISOString();
   const results = await Promise.all([
     service.from("audit_logs").delete().eq("user_id", userId).lt("created_at", cutoff(365)),
+    service.from("ai_insights").delete().eq("user_id", userId).lt("created_at", cutoff(180)),
     service.from("data_exports").delete().eq("user_id", userId).lt("created_at", cutoff(90)),
     service.from("sync_jobs").delete().eq("user_id", userId).neq("status", "running").lt("created_at", cutoff(30)),
     // Never erase revocation tombstones: an old refresh token could recreate the session.

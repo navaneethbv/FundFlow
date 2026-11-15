@@ -1,17 +1,12 @@
+import { isValidDateKey } from "@/lib/date-utils";
 import { NextResponse, type NextRequest } from "next/server";
 import { badRequest, errorResponse, requireUser } from "@/lib/http";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, getClientIp } from "@/lib/audit";
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CATEGORY_MAX_LENGTH = 80;
 
-function validDate(value: string | null): value is string {
-  if (!value || !DATE_RE.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  return parsed.toISOString().slice(0, 10) === value;
-}
 
 /** Reports-only household data: the RPC returns only the written aggregate allowlist. */
 export async function GET(request: NextRequest) {
@@ -32,7 +27,7 @@ export async function GET(request: NextRequest) {
   const start = params.get("start");
   const end = params.get("end");
   const category = params.get("category");
-  if (!householdId || !validDate(start) || !validDate(end)) {
+  if (!householdId || !isValidDateKey(start) || !isValidDateKey(end)) {
     return badRequest("householdId, start, and end are required; dates must be YYYY-MM-DD");
   }
   if (end < start) return badRequest("end must not be before start");

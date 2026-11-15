@@ -97,7 +97,7 @@ describe("Sync and Investments Coverage Boost", () => {
 
       // Inactive itemStatus -> repair_required
       const r1 = deriveProductSyncHealth({
-        itemStatus: "bad",
+        itemStatus: "disconnected",
         itemErrorCode: null,
         latestJob: null,
         latestSuccessfulJob: null,
@@ -133,7 +133,7 @@ describe("Sync and Investments Coverage Boost", () => {
         latestSuccessfulJob: null,
         now,
       });
-      expect(r4.state).toBe("repair_required");
+      expect(r4.state).toBe("stale");
 
       // Never synced (no successful job)
       const r5 = deriveProductSyncHealth({

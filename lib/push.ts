@@ -54,10 +54,12 @@ export async function sendPushToUser(
     );
 
     const service = createServiceClient();
-    const { data: subscriptions } = await service
+    const { data: subscriptions, error: readError } = await service
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
       .eq("user_id", userId);
+
+    if (readError) throw readError;
 
     for (const subscription of subscriptions ?? []) {
       try {
@@ -74,7 +76,9 @@ export async function sendPushToUser(
       } catch (error) {
         const statusCode = (error as { statusCode?: number }).statusCode;
         if (statusCode === 404 || statusCode === 410) {
-          await service.from("push_subscriptions").delete().eq("id", subscription.id);
+          const { error: deleteError } = await service.from("push_subscriptions")
+            .delete().eq("id", subscription.id).eq("user_id", userId);
+          if (deleteError) logError("push.prune", deleteError);
         } else {
           logError("push.send", error);
         }

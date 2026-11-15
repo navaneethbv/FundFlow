@@ -45,7 +45,7 @@ function buildEnvelope({
       : key;
   const iv = randomBytes(12);
   const compressed = gzipSync(Buffer.from(JSON.stringify(payload), "utf8"));
-  const cipher = createCipheriv("aes-256-gcm", derived, iv);
+  const cipher = createCipheriv("aes-256-gcm", derived instanceof ArrayBuffer ? Buffer.from(derived) : derived, iv);
   const encrypted = Buffer.concat([cipher.update(compressed), cipher.final()]);
   const envelope: Record<string, string | number> = {
     v: 1,

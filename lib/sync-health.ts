@@ -1,3 +1,4 @@
+import { isPlaidReconnectWarning, requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isLiabilityAccount } from "@/lib/account-balance";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";
@@ -170,15 +171,18 @@ export function deriveProductSyncHealth(input: Readonly<{
   const lastSuccessAt = input.latestSuccessfulJob?.updated_at ?? null;
   const lastAttemptAt = input.latestJob?.updated_at ?? null;
 
+  const lastKnownSync = validTimestamp(lastSuccessAt ?? lastAttemptAt);
   let state: ProductSyncState;
-  if (input.itemStatus !== "active") {
+  if (input.itemStatus === "disconnected" || requiresPlaidUserAction(itemCode) ||
+      requiresPlaidUserAction(jobCode) || isPlaidReconnectWarning(itemCode)) {
     state = "repair_required";
   } else if (code && RATE_LIMIT_CODES.has(code)) {
     state = "rate_limited";
   } else if (code && PRODUCT_UNAVAILABLE_CODES.has(code)) {
     state = "product_unavailable";
-  } else if (input.latestJob?.status === "failed" || code) {
-    state = "repair_required";
+  } else if ((input.latestJob?.status === "failed" || code) && lastKnownSync !== null &&
+      input.now.getTime() - lastKnownSync > 72 * 3600_000) {
+    state = "stale";
   } else if (!lastSuccessAt) {
     state = "never_synced";
   } else {

@@ -16,7 +16,10 @@ export async function isSessionRevoked(
     if (sessionError) throw sessionError;
     const session = data?.session;
     const sessionId = decodeSessionId(session?.access_token);
-    if (!sessionId) return false;
+    if (!sessionId) {
+      logError("session-revocation.missing-session-id", "Verified user has no session identifier");
+      return true;
+    }
     const { data: record, error } = await supabase
       .from("user_session_records")
       .select("revoked_at")

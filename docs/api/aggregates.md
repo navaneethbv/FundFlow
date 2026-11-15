@@ -1,9 +1,9 @@
-# Read-only MCP API contract
+# Read-only aggregates API
 
-The MCP route is disabled by default behind `mcpEndpoint`.
+This REST endpoint is disabled by default behind `mcpEndpoint`.
 It accepts only a scoped `fft_` bearer token and never writes application data.
 
-## `GET` or `POST /api/mcp`
+## `GET` or `POST /api/v1/aggregates`
 
 `GET` uses query parameters.
 `POST` uses the same fields in a JSON object.

@@ -7,6 +7,15 @@ import {
 } from "@/lib/report-email";
 import type { WeeklyReportData } from "@/lib/weekly-report";
 
+function senderAddress(): string {
+  const sender = process.env.SMTP_FROM?.trim();
+  if (sender) return sender;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SMTP is not configured (SMTP_FROM); refusing to send financial email");
+  }
+  return "FundFlow <onboarding@resend.dev>";
+}
+
 async function createMailTransport() {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT ?? "587");
@@ -58,10 +67,11 @@ export async function sendWeeklyReportEmail(
   pdfBuffer: Buffer,
   dashboardUrl: string,
 ) {
+  const from = senderAddress();
   const { hostConfigured, transporter } = await createMailTransport();
   const content = renderWeeklyReportEmail(data, dashboardUrl);
   const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>",
+    from,
     to: data.userEmail,
     subject: content.subject,
     text: content.text,
@@ -84,10 +94,11 @@ export async function sendDailyDigestEmail(
   date: string,
   notificationsUrl: string,
 ) {
+  const from = senderAddress();
   const { hostConfigured, transporter } = await createMailTransport();
   const content = renderDailyDigestEmail(notifications, date, notificationsUrl);
   const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>",
+    from,
     to: toEmail,
     subject: content.subject,
     text: content.text,
@@ -104,9 +115,10 @@ export async function sendBackupEmail(
   archive: Buffer,
   periodLabel: string,
 ) {
+  const from = senderAddress();
   const { hostConfigured, transporter } = await createMailTransport();
   const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>",
+    from,
     to: toEmail,
     subject: `FundFlow encrypted backup — ${periodLabel}`,
     text: [
@@ -129,9 +141,10 @@ export async function sendBackupEmail(
 
 /** New-device login alert (7.1): device family only — never IPs or tokens. */
 export async function sendLoginAlertEmail(toEmail: string, deviceLabel: string) {
+  const from = senderAddress();
   const { hostConfigured, transporter } = await createMailTransport();
   const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>",
+    from,
     to: toEmail,
     subject: "New sign-in to your FundFlow account",
     text: [
@@ -152,9 +165,10 @@ export async function sendHouseholdInviteEmail(
   householdName: string,
   acceptUrl: string,
 ) {
+  const from = senderAddress();
   const { hostConfigured, transporter } = await createMailTransport();
   const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>",
+    from,
     to: toEmail,
     subject: `${inviterEmail} invited you to the "${householdName}" household on FundFlow`,
     text: [
@@ -184,6 +198,7 @@ export async function sendCronAlertEmail(
   cronName: string,
   summary: CronAlertSummary,
 ) {
+  const from = senderAddress();
   const { hostConfigured, transporter } = await createMailTransport();
   const lines = [
     `The ${cronName} cron run at ${new Date().toISOString()} reported failures.`,
@@ -192,7 +207,7 @@ export async function sendCronAlertEmail(
     "Check the Vercel logs and the dashboard sync status for detail.",
   ].filter((line): line is string => Boolean(line));
   const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "FundFlow <onboarding@resend.dev>",
+    from,
     to: toEmail,
     subject: `FundFlow cron failure: ${cronName}`,
     text: lines.join("\n"),

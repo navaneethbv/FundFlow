@@ -31,6 +31,9 @@ export async function resolveExportContext(
     if (!token) return auth;
     return { userId: token.userId, supabase: createServiceClient() };
   }
+  if (!(await checkRateLimit(`export:${auth.user.id}`, 30, 60, { failClosed: true }))) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
   return { userId: auth.user.id, supabase: auth.supabase };
 }
 

@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getPlaidClient } from "@/lib/plaid";
+import { removeItemAtPlaid } from "@/lib/plaid-item-removal";
 import { errorResponse } from "@/lib/http";
-import { decryptItemToken } from "@/lib/plaid-service";
 import { requireOwnedItem } from "@/lib/plaid-item-route";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
@@ -19,12 +18,13 @@ export async function POST(request: NextRequest) {
     if (!owned.ok) return owned.response;
     const { user, item } = owned;
 
-    // Best-effort remove at Plaid; proceed to delete local data regardless.
-    try {
-      const plaid = getPlaidClient();
-      await plaid.itemRemove({ access_token: decryptItemToken(item) });
-    } catch (error) {
-      logError("plaid.disconnect.itemRemove", error);
+    if (item.status !== "disconnected") {
+      try {
+        await removeItemAtPlaid(item);
+      } catch (error) {
+        logError("plaid.disconnect.itemRemove", error);
+        return NextResponse.json({ error: "The bank connection could not be removed. Try again." }, { status: 503 });
+      }
     }
 
     const supabase = createServiceClient();

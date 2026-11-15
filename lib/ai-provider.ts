@@ -20,13 +20,14 @@ export function getAiModel(): string {
   return process.env.AI_INSIGHTS_MODEL ?? DEFAULT_AI_MODEL;
 }
 
-function supportsAdaptiveThinking(model: string): boolean {
-  // Explicit supported families and versions, with optional dated API IDs.
-  return /^claude-(?:sonnet-(?:4-6|5(?:-5)?)|opus-(?:4-[678]|5(?:-5)?))(?:-\d{8})?$/.test(model);
+function getAnthropicClient(timeout = 30_000): Anthropic {
+  return new Anthropic({ apiKey: serverEnv.anthropicApiKey, timeout, maxRetries: 1 });
 }
 
-function getAnthropicClient(): Anthropic {
-  return new Anthropic({ apiKey: serverEnv.anthropicApiKey });
+function logUsage(route: string, usage: Anthropic.Usage | undefined): void {
+  if (usage) console.info(`[ai.${route}.usage]`, {
+    inputTokens: usage.input_tokens, outputTokens: usage.output_tokens,
+  });
 }
 
 export function isAiProviderConfigured(): boolean {
@@ -169,7 +170,6 @@ export async function generateInsightsWithProvider(input: {
   const requestOptions: Anthropic.MessageCreateParams = {
     model,
     max_tokens: 2048,
-    ...(supportsAdaptiveThinking(model) ? { thinking: { type: "adaptive" } } : {}),
     system: SYSTEM_PROMPT,
     output_config: {
       format: { type: "json_schema", schema: INSIGHT_SCHEMA },
@@ -184,18 +184,27 @@ export async function generateInsightsWithProvider(input: {
 
   const response = await client.messages.create(requestOptions);
 
-  if (response.stop_reason === "refusal") {
-    throw new Error("ai-provider refusal");
+  logUsage("insights", response.usage);
+  if (response.stop_reason === "refusal" || response.stop_reason === "max_tokens") {
+    throw new Error("AI insight output was incomplete");
   }
   const textBlock = response.content.find(
     (block): block is Anthropic.TextBlock => block.type === "text",
   );
   if (!textBlock) throw new Error("ai-provider empty response");
 
-  const parsed = JSON.parse(textBlock.text) as {
-    insights: { insight_type: string; summary: string }[];
-  };
-  return parsed.insights.map((insight) => ({
+  const parsed = JSON.parse(textBlock.text);
+  const kinds = INSIGHT_SCHEMA.properties.insights.items.properties.insight_type.enum;
+  if (!Array.isArray(parsed?.insights) || parsed.insights.length > kinds.length) {
+    throw new Error("Invalid AI insight output");
+  }
+  const insights: Array<{ insight_type: string; summary: string }> = parsed.insights;
+  for (const insight of insights) {
+    if (!insight || !kinds.some((kind) => kind === insight.insight_type) || typeof insight.summary !== "string") {
+      throw new Error("Invalid AI insight");
+    }
+  }
+  return insights.map((insight) => ({
     insightType: insight.insight_type,
     sourceMonth: latestMonth,
     summary: insight.summary.slice(0, 1200),
@@ -214,7 +223,6 @@ export async function answerSpendingQuestionWithProvider(input: {
   const requestOptions: Anthropic.MessageCreateParams = {
     model,
     max_tokens: 600,
-    ...(supportsAdaptiveThinking(model) ? { thinking: { type: "adaptive" } } : {}),
     system:
       "You answer one question about the user's own spending using ONLY the provided aggregates (monthly category totals and top merchants). If the aggregates cannot answer the question, say so plainly. 1-4 sentences, specific dollar figures, no advice about financial products, no invented data.",
     messages: [
@@ -227,6 +235,10 @@ export async function answerSpendingQuestionWithProvider(input: {
 
   const response = await client.messages.create(requestOptions);
 
+  logUsage("ask", response.usage);
+  if (response.stop_reason === "max_tokens") {
+    return { answer: "The answer was cut short. Try asking a more specific question." };
+  }
   if (response.stop_reason === "refusal") {
     return { answer: "I can't help with that question.", refusal: true };
   }
@@ -275,7 +287,7 @@ export async function extractReceiptWithProvider(input: {
   fileBase64: string;
   mediaType: string;
 }): Promise<{ extracted: ExtractedReceiptData | null; refusal?: boolean }> {
-  const client = getAnthropicClient();
+  const client = getAnthropicClient(45_000);
   const model = getAiModel();
   const resolvedMediaType: ReceiptImageMediaType =
     KNOWN_IMAGE_TYPES[input.mediaType] ?? "image/jpeg";
@@ -283,7 +295,6 @@ export async function extractReceiptWithProvider(input: {
   const requestOptions: Anthropic.MessageCreateParams = {
     model,
     max_tokens: 1024,
-    ...(supportsAdaptiveThinking(model) ? { thinking: { type: "adaptive" } } : {}),
     system:
       "Extract the receipt's merchant name, total amount (number), purchase date (YYYY-MM-DD), and up to 15 short line-item descriptions. If a field is unreadable, use your best guess for merchant, 0 for amount, and today's implied date only if printed.",
     output_config: { format: { type: "json_schema", schema: RECEIPT_SCHEMA } },
@@ -307,6 +318,8 @@ export async function extractReceiptWithProvider(input: {
 
   const response = await client.messages.create(requestOptions);
 
+  logUsage("receipt", response.usage);
+  if (response.stop_reason === "max_tokens") throw new Error("AI receipt output was incomplete");
   if (response.stop_reason === "refusal") {
     return { extracted: null, refusal: true };
   }
@@ -315,6 +328,16 @@ export async function extractReceiptWithProvider(input: {
   );
   if (!textBlock) throw new Error("receipt: empty response");
 
-  const parsed = JSON.parse(textBlock.text) as ExtractedReceiptData;
-  return { extracted: parsed };
+  const parsed = JSON.parse(textBlock.text);
+  if (typeof parsed?.merchant !== "string" || typeof parsed.date !== "string" ||
+      typeof parsed.amount !== "number" || !Number.isFinite(parsed.amount) ||
+      !Array.isArray(parsed.line_items) || parsed.line_items.some((item: unknown) => typeof item !== "string")) {
+    throw new Error("Invalid AI receipt output");
+  }
+  return { extracted: {
+    merchant: parsed.merchant.slice(0, 180),
+    amount: parsed.amount >= 0 && parsed.amount <= 1_000_000 ? parsed.amount : 0,
+    date: parsed.date.slice(0, 32),
+    line_items: parsed.line_items.slice(0, 15).map((item: string) => item.slice(0, 240)),
+  } };
 }

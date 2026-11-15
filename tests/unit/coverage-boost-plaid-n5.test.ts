@@ -1,3 +1,5 @@
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
+import { withWebhookWork } from "../fixtures/webhook-after";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextResponse, NextRequest } from "next/server";
 import crypto from "node:crypto";
@@ -73,7 +75,8 @@ vi.mock("@/lib/feature-flags", () => ({
   isFeatureEnabled: (...args: unknown[]) => mockIsFeatureEnabled(...args),
 }));
 
-import { POST as webhookPost } from "@/app/api/plaid/webhook/route";
+import { POST as routePost } from "@/app/api/plaid/webhook/route";
+const webhookPost = withWebhookWork(routePost);
 import { POST as subscribePost, DELETE as subscribeDelete } from "@/app/api/push/subscribe/route";
 
 const { publicKey, privateKey } = crypto.generateKeyPairSync("ec", {
@@ -158,20 +161,20 @@ describe("coverage-boost-plaid-n5", () => {
       const req = signedRequest({ webhook_type: "BALANCE" }, true, "fail-kid");
       const res = await webhookPost(req);
       expect(res.status).toBe(401);
-      expect(mockLogError).toHaveBeenCalledWith("webhook.verify", expect.any(Error));
+      expect(mockLogError).toHaveBeenCalledWith("webhook.key-fetch", "Verification key unavailable");
     });
 
     it("verifies a signed TRANSACTIONS webhook and syncs", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("PLAID_ENV", "production");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const req = signedRequest(
         { webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "item-123" },
         true,
       );
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
-      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
+      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1", status: "active" });
     });
 
     it("reuses the cached verification key for a second signed webhook", async () => {
@@ -200,14 +203,14 @@ describe("coverage-boost-plaid-n5", () => {
 
     it("syncs investments for a HOLDINGS webhook when the item exists", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const req = new NextRequest("http://localhost/api/plaid/webhook", {
         method: "POST",
         body: JSON.stringify({ webhook_type: "HOLDINGS", webhook_code: "DEFAULT_UPDATE", item_id: "item-123" }),
       });
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
-      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
+      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1", status: "active" });
     });
 
     it("does nothing for a HOLDINGS webhook when the item is missing", async () => {
@@ -223,7 +226,7 @@ describe("coverage-boost-plaid-n5", () => {
 
     it("handles an ITEM PENDING_EXPIRATION webhook", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const req = new NextRequest("http://localhost/api/plaid/webhook", {
         method: "POST",
         body: JSON.stringify({ webhook_type: "ITEM", webhook_code: "PENDING_EXPIRATION", item_id: "item-123" }),
@@ -235,7 +238,7 @@ describe("coverage-boost-plaid-n5", () => {
 
     it("handles an ITEM LOGIN_REPAIRED webhook", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const req = new NextRequest("http://localhost/api/plaid/webhook", {
         method: "POST",
         body: JSON.stringify({ webhook_type: "ITEM", webhook_code: "LOGIN_REPAIRED", item_id: "item-123" }),

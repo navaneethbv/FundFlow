@@ -14,7 +14,7 @@ function isPublicPage(pathname: string): boolean {
   return (
     pathname === "/" ||
     PUBLIC_PAGE_PATHS.has(pathname) ||
-    pathname.startsWith("/auth")
+    (pathname === "/auth" || pathname.startsWith("/auth/"))
   );
 }
 

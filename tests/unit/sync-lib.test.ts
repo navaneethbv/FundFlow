@@ -59,6 +59,8 @@ import type { PlaidItemRow } from "@/lib/types";
 describe("lib/sync", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTransactionsSync.mockReset();
+    mockServiceClient.rpc.mockReset().mockResolvedValue({ data: true, error: null });
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-07-29T12:00:00Z"));
   });
@@ -159,13 +161,14 @@ describe("lib/sync", () => {
       );
       expect(mockTransactionsSync).toHaveBeenCalledWith({
         access_token: "access-token-123", cursor: "cursor-0",
+        count: 500,
         options: { include_original_description: true },
       });
       expect(upsertTxns).toHaveBeenCalledWith([
         expect.objectContaining({ original_description: originalDescription ?? null }),
       ], { onConflict: "plaid_transaction_id" });
       expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-next");
-      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null, expect.objectContaining({ id: "item-db-1" }));
     });
 
     it("skips the sync when another run already holds the item claim", async () => {
@@ -234,26 +237,16 @@ describe("lib/sync", () => {
       expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
 
-    it("proceeds without a claim when the claim RPC fails, and does not release", async () => {
+    it("skips Plaid when the claim RPC fails, and does not release", async () => {
       mockServiceClient.rpc.mockResolvedValueOnce({
         data: null,
         error: new Error("Claim error"),
       });
-      mockTransactionsSync.mockResolvedValueOnce({
-        data: {
-          added: [],
-          modified: [],
-          removed: [],
-          accounts: [],
-          next_cursor: null,
-          has_more: false,
-        },
-      });
-
       const res = await syncItemTransactions(dummyItem);
 
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
       expect(mockLogError).toHaveBeenCalledWith("sync.claim", expect.any(Error));
+      expect(mockTransactionsSync).not.toHaveBeenCalled();
       expect(mockServiceClient.rpc).not.toHaveBeenCalledWith("release_item_sync", expect.anything());
       expect(mockCompleteItemCursor).not.toHaveBeenCalled();
     });
@@ -353,7 +346,8 @@ describe("lib/sync", () => {
         }
         expect(mockTransactionsSync).toHaveBeenNthCalledWith(2, {
           access_token: "access-token-123", cursor: "cursor-1",
-          options: { include_original_description: true },
+          count: 500,
+        options: { include_original_description: true },
         });
         expect(mockCompleteItemCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-2");
       });
@@ -388,7 +382,7 @@ describe("lib/sync", () => {
       );
     });
 
-    it("discards stale bounded Repair progress before a routine sync", async () => {
+    it("resumes bounded Repair progress during a routine sync", async () => {
       const itemWithRepairProgress: PlaidItemRow = {
         ...dummyItem,
         repair_sync_cursor: "repair-cursor-8",
@@ -407,14 +401,15 @@ describe("lib/sync", () => {
 
       await syncItemTransactions(itemWithRepairProgress);
 
-      expect(mockClearItemRepairCursor).toHaveBeenCalledTimes(2);
+      expect(mockClearItemRepairCursor).toHaveBeenCalledTimes(1);
       expect(mockClearItemRepairCursor).toHaveBeenCalledWith(
         "user-1",
         "item-db-1",
       );
       expect(mockTransactionsSync).toHaveBeenCalledWith({
         access_token: "access-token-123",
-        cursor: "cursor-0",
+        cursor: "repair-cursor-8",
+        count: 500,
         options: { include_original_description: true },
       });
       expect(mockCompleteItemCursor).not.toHaveBeenCalled();
@@ -830,14 +825,24 @@ describe("lib/sync", () => {
       const res = await syncAllForUser("user-1");
 
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
-      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_LOGIN_REQUIRED");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_LOGIN_REQUIRED", expect.objectContaining({ id: "item-db-1" }));
       expect(mockCreateNotification).toHaveBeenCalledWith(
         "user-1",
         "broken_bank",
-        expect.objectContaining({ title: expect.stringContaining("Chase Bank") }),
-        "item-db-1",
+        expect.objectContaining({ title: "Reconnect Chase Bank" }),
+        "broken_bank:item-db-1:2026-07-29",
+        "exact",
       );
       expect(updateJob).toHaveBeenCalledWith({ status: "failed", last_error: "ITEM_LOGIN_REQUIRED" });
+    });
+
+    it("keeps a bank active and skips broken-bank alerts when Plaid is temporarily unavailable", async () => {
+      mockListActiveItems.mockResolvedValue([dummyItem]);
+      mockServiceClient.from.mockImplementation(() => { throw new Error("Job store unavailable"); });
+      mockTransactionsSync.mockRejectedValueOnce({ response: { status: 503, data: { error_code: "INSTITUTION_DOWN" } } });
+      await syncAllForUser("user-1");
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", "INSTITUTION_DOWN", expect.objectContaining({ id: "item-db-1" }));
+      expect(mockCreateNotification).not.toHaveBeenCalled();
     });
 
     it("handles sync job record errors and null institution name fallback", async () => {
@@ -854,12 +859,8 @@ describe("lib/sync", () => {
 
       expect(res).toEqual({ added: 0, modified: 0, removed: 0 });
       expect(mockLogError).toHaveBeenCalledWith("sync.job-record", expect.any(Error));
-      expect(mockCreateNotification).toHaveBeenCalledWith(
-        "user-1",
-        "broken_bank",
-        expect.objectContaining({ title: "Bank connection issue: Bank" }),
-        "item-db-1",
-      );
+      expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", "sync_failed", expect.objectContaining({ id: "item-db-1" }));
+      expect(mockCreateNotification).not.toHaveBeenCalled();
     });
 
     it("logs and continues when recording the job end fails", async () => {
@@ -921,8 +922,9 @@ describe("lib/sync", () => {
       expect(mockCreateNotification).toHaveBeenCalledWith(
         "user-1",
         "broken_bank",
-        expect.objectContaining({ title: expect.stringContaining("Chase Bank") }),
-        "item-db-1",
+        expect.objectContaining({ title: "Reconnect Chase Bank" }),
+        "broken_bank:item-db-1:2026-07-29",
+        "exact",
       );
     });
   });

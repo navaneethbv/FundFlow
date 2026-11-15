@@ -1,4 +1,4 @@
-import { addDays, addMonths, parseDate } from "@/lib/date-utils";
+import { addDays, addMonths, isValidDateKey, parseDate } from "@/lib/date-utils";
 export type PaydayCadence = "weekly" | "biweekly" | "semimonthly" | "monthly";
 export interface PaydaySettings {
   cadence: PaydayCadence;
@@ -8,14 +8,7 @@ export interface PaydaySettings {
   day2: number | null;
 }
 export function validPaydayDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
-    return false;
-  const parsed = parseDate(value);
-  return (
-    Number.isFinite(parsed.getTime()) &&
-    parsed.getUTCFullYear() <= 9998 &&
-    parsed.toISOString().slice(0, 10) === value
-  );
+  return isValidDateKey(value) && value >= "0100-01-01" && value <= "9998-12-31";
 }
 function validPayAmount(value: unknown): value is number {
   return (

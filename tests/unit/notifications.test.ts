@@ -546,7 +546,7 @@ describe("notifications manager", () => {
     await expect(processNotificationsForUser("user-1")).resolves.not.toThrow();
   });
 
-  it("handles broken bank items missing institution and error metadata", async () => {
+  it("skips broken-bank alerts when the error code is unknown", async () => {
     mockGetDashboardData.mockResolvedValue({
       cashFlowForecast: { lowBalanceRisk: false },
       budgetEnvelopes: [],
@@ -587,7 +587,7 @@ describe("notifications manager", () => {
     });
 
     await processNotificationsForUser("user-1");
-    expect(bodies.some((b) => b.includes("your bank") && b.includes("unknown"))).toBe(true);
+    expect(bodies.some((b) => b.includes("your bank"))).toBe(false);
   });
 
   it("handles exact dedupe unique collision and body matching in hasRecentNotification", async () => {

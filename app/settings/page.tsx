@@ -350,7 +350,8 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
     const [{ data: items }, { data: manualAccounts }, { data: accounts }, { data: households }] = await Promise.all([
       supabase
         .from("plaid_items")
-        .select(`${SYNC_HEALTH_ITEM_COLUMNS}, shared_household_id`)
+        .select(`${SYNC_HEALTH_ITEM_COLUMNS}, shared_household_id, new_accounts_available`)
+        .eq("user_id", userId)
         .order("created_at"),
       supabase.from("manual_accounts").select("id, name, account_type, balance, include_in_net_worth").order("created_at"),
       supabase.from("accounts").select("id, name, mask, type, apr").eq("user_id", userId).order("name"),
@@ -366,6 +367,7 @@ export default async function SettingsPage({ searchParams }: Readonly<PageProps>
       last_sync_completed_pages?: boolean | null;
       initial_history_incomplete?: boolean | null;
       cursor_reset_detected_at?: string | null;
+      new_accounts_available?: boolean;
       shared_household_id?: string | null;
     }>;
     const observability = await loadInstitutionObservability(supabase, userId, safeItems);

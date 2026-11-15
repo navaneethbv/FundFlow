@@ -123,7 +123,7 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     });
     expect(mockUpdateItemRepairCursor).toHaveBeenCalledWith("user-1", "item-db-1", "cursor-2");
     expect(mockCompleteItemCursor).not.toHaveBeenCalled();
-    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null);
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", null, expect.objectContaining({ id: "item-db-1" }));
     expect(mockServiceClient.rpc).toHaveBeenCalledWith("claim_item_sync", {
       p_item_id: "item-db-1",
       p_stale_seconds: 300,
@@ -282,7 +282,8 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     expect(mockTransactionsSync).toHaveBeenCalledWith({
       access_token: "access-token-123",
       cursor: "repair-cursor-8",
-      options: { include_original_description: true },
+      count: 500,
+        options: { include_original_description: true },
     });
     expect(mockClearItemRepairCursor).toHaveBeenCalledWith(
       "user-1",
@@ -317,7 +318,8 @@ describe("backfillItemTransactions (bounded repair backfill)", () => {
     expect(mockTransactionsSync).toHaveBeenCalledWith({
       access_token: "access-token-123",
       cursor: "committed-cursor",
-      options: { include_original_description: true },
+      count: 500,
+        options: { include_original_description: true },
     });
     expect(mockCompleteItemCursor).toHaveBeenCalledWith(
       "user-1",

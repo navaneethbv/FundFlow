@@ -8,7 +8,7 @@ import { resolveAiConsent } from "@/lib/ai-gate";
 import { fetchPrivacySafeRows, recentHistoryStart } from "@/lib/export";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
 import { readJsonBody } from "@/lib/request-body";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { runMeteredAiRequest } from "@/lib/ai-request";
 import { writeAudit, getClientIp } from "@/lib/audit";
 
 /**
@@ -51,16 +51,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allowed = await checkRateLimit(`ai-ask:${user.id}`, 10, 24 * 3600, {
-      failClosed: true,
-    });
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Daily question limit reached." },
-        { status: 429 },
-      );
-    }
-
     const exportResult = await fetchPrivacySafeRows(supabase, user.id, {
       startDate: recentHistoryStart(),
       includeFlow: true,
@@ -82,10 +72,9 @@ export async function POST(request: NextRequest) {
       })),
     );
 
-    const { answer } = await answerSpendingQuestionWithProvider({
-      question,
-      payload,
-    });
+    const result = await runMeteredAiRequest("ask", user.id, () =>
+      answerSpendingQuestionWithProvider({ question, payload }));
+    if (result instanceof NextResponse) return result;
 
     await writeAudit({
       userId: user.id,
@@ -94,7 +83,7 @@ export async function POST(request: NextRequest) {
       ip: getClientIp(request),
     });
 
-    return NextResponse.json({ answer });
+    return NextResponse.json({ answer: result.answer });
   } catch (error) {
     return errorResponse("ai.ask", error);
   }

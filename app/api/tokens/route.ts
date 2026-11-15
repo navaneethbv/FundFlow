@@ -54,12 +54,16 @@ export async function DELETE(request: NextRequest) {
     const body = (await request.json().catch(() => ({}))) as { id?: string };
     if (!body.id) return badRequest("Missing token id");
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("api_tokens")
       .update({ revoked_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .eq("id", body.id);
+      .eq("id", body.id)
+      .is("revoked_at", null)
+      .select("id");
     if (error) throw error;
+
+    if (!data?.length) return NextResponse.json({ error: "Token not found" }, { status: 404 });
 
     await requestAudits.apiTokenRevoked(request, user.id, { id: body.id });
 

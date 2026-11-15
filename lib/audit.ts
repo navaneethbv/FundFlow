@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import "server-only";
 import type { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -58,6 +59,7 @@ export type AuditAction =
   | "receipt_deleted"
   | "statement_uploaded"
   | "statement_deleted"
+  | "ai_insights_generated"
   | "ai_question"
   | "ai_consent_updated"
   | "household_share_changed"
@@ -162,12 +164,13 @@ export async function writeAudit({
 }: AuditParams): Promise<void> {
   try {
     const supabase = createServiceClient();
-    await supabase.from("audit_logs").insert({
+    const { error } = (await supabase.from("audit_logs").insert({
       user_id: userId,
       action,
       metadata,
       ip,
-    });
+    })) ?? {};
+    if (error) logError("audit.write", error);
   } catch (error) {
     logError("audit.write", error);
   }
@@ -181,6 +184,11 @@ export async function writeAudit({
  * `x-real-ip` and `x-vercel-forwarded-for` and strips client-set copies.
  */
 export function getClientIp(request: Pick<NextRequest, "headers">): string | null {
+  const trustedHeader = process.env.TRUSTED_IP_HEADER;
+  if (trustedHeader && /^[a-z0-9-]+$/i.test(trustedHeader)) {
+    const address = request.headers.get(trustedHeader)?.trim();
+    return address && isIP(address) ? address : null;
+  }
   const realIp = request.headers.get("x-real-ip");
   if (realIp) return realIp;
   const vercelForwarded = request.headers.get("x-vercel-forwarded-for");

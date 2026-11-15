@@ -1,3 +1,4 @@
+import { isValidDateKey } from "@/lib/date-utils";
 import { financeTotals, type CanonicalFinanceTransaction } from "@/lib/finance-domain";
 import type { BreakdownDimension } from "@/lib/cash-flow";
 import type { SankeyLink, SankeyNode } from "@/lib/sankey";
@@ -422,14 +423,7 @@ const MAX_SCOPE_LENGTH = 100;
 
 /** A calendar-valid `YYYY-MM-DD`; the regex alone would accept 2026-13-45. */
 export function isIsoDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return (
-    !Number.isNaN(parsed.getTime()) &&
-    parsed.toISOString().slice(0, 10) === value
-  );
+  return isValidDateKey(value);
 }
 
 function parseStringList(value: unknown): string[] | null {

@@ -1,3 +1,4 @@
+import { isValidDateKey } from "@/lib/date-utils";
 import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientIp, writeAudit } from "@/lib/audit";
@@ -14,12 +15,6 @@ import { readFormBody } from "@/lib/request-body";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 
-function isIsoDate(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  return date.toISOString().slice(0, 10) === value;
-}
 
 interface ParsedReceiptForm {
   file: File;
@@ -41,7 +36,7 @@ function parseReceiptUploadForm(form: FormData | null): ParsedReceiptForm {
   }
   const purchaseDateValue = form?.get("purchaseDate");
   const purchaseDate = typeof purchaseDateValue === "string" && purchaseDateValue ? purchaseDateValue : null;
-  if (purchaseDate && !isIsoDate(purchaseDate)) {
+  if (purchaseDate && !isValidDateKey(purchaseDate)) {
     return { file, merchant, purchaseDate: null, total: null, errorResponse: badRequest("purchaseDate is invalid") };
   }
   const totalValue = form?.get("total");

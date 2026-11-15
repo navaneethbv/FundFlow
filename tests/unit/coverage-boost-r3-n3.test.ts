@@ -1,3 +1,5 @@
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
+import { withWebhookWork } from "../fixtures/webhook-after";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -66,7 +68,8 @@ vi.mock("@/lib/feature-flags", () => ({
   isFeatureEnabled: (...args: unknown[]) => mockIsFeatureEnabled(...args),
 }));
 
-import { POST as webhookPost } from "@/app/api/plaid/webhook/route";
+import { POST as routePost } from "@/app/api/plaid/webhook/route";
+const webhookPost = withWebhookWork(routePost);
 
 const { publicKey, privateKey } = crypto.generateKeyPairSync("ec", {
   namedCurve: "P-256",
@@ -276,7 +279,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
       expect(mockWebhookVerificationKeyGet).toHaveBeenCalledTimes(1);
     });
 
-    it("does not cache an expired verification key", async () => {
+    it("rejects expired verification keys and caches the rejection briefly", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("PLAID_ENV", "production");
       mockWebhookVerificationKeyGet.mockResolvedValue({
@@ -288,9 +291,9 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
           { header: { kid: "expired-kid", alg: "ES256" } },
         );
         const res = await webhookPost(req);
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(401);
       }
-      expect(mockWebhookVerificationKeyGet).toHaveBeenCalledTimes(2);
+      expect(mockWebhookVerificationKeyGet).toHaveBeenCalledTimes(1);
     });
 
     it("logs and rejects when the verification key fetch fails", async () => {
@@ -301,17 +304,17 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
         signedWebhook({ webhook_type: "BALANCE" }, { header: { kid: "boom-kid", alg: "ES256" } }),
       );
       expect(res.status).toBe(401);
-      expect(mockLogError).toHaveBeenCalledWith("webhook.verify", expect.any(Error));
+      expect(mockLogError).toHaveBeenCalledWith("webhook.key-fetch", "Verification key unavailable");
     });
 
-    it("logs and rejects when the verification header is not parseable", async () => {
+    it("rejects malformed verification headers before looking up a key", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("PLAID_ENV", "production");
       const res = await webhookPost(
         signedWebhook({}, { headerValue: "bm90LWpzb24=.cGF5bG9hZA.c2ln" }),
       );
       expect(res.status).toBe(401);
-      expect(mockLogError).toHaveBeenCalledWith("webhook.verify", expect.any(Error));
+      expect(mockWebhookVerificationKeyGet).not.toHaveBeenCalled();
     });
   });
 
@@ -352,13 +355,13 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("syncs transactions when the item exists", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "i1" }),
       );
       expect(res.status).toBe(200);
       expect(mockGetItemByPlaidItemId).toHaveBeenCalledWith("i1");
-      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
+      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1", status: "active" });
     });
 
     it("does not sync when the item is missing", async () => {
@@ -409,17 +412,17 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("syncs investments for a DEFAULT_UPDATE webhook", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "HOLDINGS", webhook_code: "DEFAULT_UPDATE", item_id: "i1" }),
       );
       expect(res.status).toBe(200);
-      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
+      expect(mockSyncInvestmentsForItem).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1", status: "active" });
     });
 
     it("swallows a rejected holdings sync and logs it", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       mockSyncInvestmentsForItem.mockRejectedValue(new Error("holdings boom"));
       const res = await webhookPost(
         plainWebhook({ webhook_type: "HOLDINGS", webhook_code: "HISTORICAL_UPDATE", item_id: "i1" }),
@@ -460,7 +463,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("marks the item in error with the plaid error code", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: "ERROR", item_id: "i1", error: { error_code: "ITEM_LOGIN_REQUIRED" } }),
       );
@@ -469,12 +472,12 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
     });
 
     it.each([
-      ["falls back to ITEM_ERROR when no error code is present", "ERROR", "error", "ITEM_ERROR"],
+      ["falls back to ITEM_ERROR when no error code is present", "ERROR", "active", "ITEM_ERROR"],
       ["handles PENDING_EXPIRATION", "PENDING_EXPIRATION", "active", "PENDING_EXPIRATION"],
       ["handles LOGIN_REPAIRED", "LOGIN_REPAIRED", "active", null],
     ])("%s", async (_label, webhookCode, expectedStatus, expectedConsent) => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: webhookCode, item_id: "i1" }),
       );
@@ -484,7 +487,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("handles USER_PERMISSION_REVOKED", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: "USER_PERMISSION_REVOKED", item_id: "i1" }),
       );
@@ -494,7 +497,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
 
     it("ignores an ITEM webhook with an unrecognized code", async () => {
       vi.stubEnv("PLAID_ENV", "sandbox");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const res = await webhookPost(
         plainWebhook({ webhook_type: "ITEM", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "i1" }),
       );
@@ -528,7 +531,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
     it("verifies a signed valid webhook end-to-end", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("PLAID_ENV", "production");
-      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1" });
+      mockGetItemByPlaidItemId.mockResolvedValue({ id: "db-item", user_id: "user-1", status: "active" });
       const req = signedWebhook(
         { webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "item-1" },
         { header: { kid: "final-kid", alg: "ES256" } },
@@ -536,7 +539,7 @@ describe("POST /api/plaid/webhook (r3-n3)", () => {
       const res = await webhookPost(req);
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1" });
+      expect(mockSyncItemTransactions).toHaveBeenCalledWith({ id: "db-item", user_id: "user-1", status: "active" });
     });
   });
 });

@@ -6,16 +6,13 @@ Remaining live acceptance and feature-flag decisions stay separate from a merged
 
 ## Current review: repository review, 2026-11-15
 
-[The review](reviews/2026-11-15-repository-review.md) covers `main` at `37908d5`; lint, typecheck, the unit suite, and the palette validator passed, and nothing was run against live services.
-It records four P1 defects, eleven P2 gaps, and a P3 list, none fixed yet.
+[[The review](reviews/2026-11-15-repository-review.md) describes the original findings against `37908d5`. The follow-up on PR #239 implements the P1 and P2 code changes and the scoped P3 fixes in the handoff.
 
-- P1-1: a transient sync failure sets a bank item to `error`, and the cron and Refresh then skip it.
-- P1-2: account deletion does not remove `error`-state items at Plaid.
-- P1-3: the daily digest only includes notifications created between UTC midnight and the 07:00 UTC cron.
-- P1-4: `writeAudit` ignores the insert result, so a rejected audit row is neither stored nor logged.
-- 63 of 75 feature flags default to off with no exit criterion; the review proposes a triage.
-
-The review's "Recommended order of work" section sizes these into ten PRs; two of them add migrations.
+- Apply and verify `20261115130000_cron_delivery_windows.sql` before deploying the code that reads it. Verify deployment state through the linked migration list.
+- Discover and Fidelity report `ITEM_LOGIN_REQUIRED`. The account owner must finish Plaid Link update mode for each existing item. Verify the reconnect clears the item error and that the next sync runs successfully.
+- [Feature flag rollout review](FEATURE_FLAGS.md) records the acceptance criteria and retirement candidate. Review and staging acceptance are pending.
+- The owner-deferred signup decision, production transaction-time migration, and other items carried over from earlier reviews remain tracked in the review’s “Still open from earlier reviews” table.
+- Plaid 51 and web-push 4 require independent compatibility work. The tooling constraints for ESLint 10 and TypeScript 7 remain in Dependabot configuration.
 
 ## Bill search and transaction times, 2026-10-25
 

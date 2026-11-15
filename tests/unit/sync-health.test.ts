@@ -143,7 +143,7 @@ describe("deriveProductSyncHealth", () => {
     ["ITEM_LOGIN_REQUIRED", "repair_required"],
     ["rate_limited", "rate_limited"],
     ["no_investment_product", "product_unavailable"],
-    ["product_not_ready", "repair_required"],
+    ["product_not_ready", "never_synced"],
   ] as const)("maps safe provider code %s to %s", (code, state) => {
     expect(
       deriveProductSyncHealth({
@@ -165,13 +165,13 @@ describe("deriveProductSyncHealth", () => {
         latestSuccessfulJob: null,
         now: NOW,
       }),
-    ).toMatchObject({ state: "repair_required", safeErrorCode: null });
+    ).toMatchObject({ state: "never_synced", safeErrorCode: null });
   });
 
   it.each([
     ["rate_limited", "rate_limited"],
     ["no_investment_product", "product_unavailable"],
-    ["product_not_ready", "repair_required"],
+    ["product_not_ready", "healthy"],
   ] as const)("honors the recorded non-error investment outcome %s", (code, state) => {
     expect(
       deriveProductSyncHealth({

@@ -12,42 +12,64 @@
 
 /** Every known flag and its shipped default. */
 export const FEATURE_FLAG_DEFAULTS = {
+  // Rollout: manually entered home and mortgage reconciliation.
   mortgageEquity: false,
+  // Rollout: holdings with mixed broker basis and statement basis.
   investmentBasis: false,
+  // Rollout: dated cash flows and unresolved return results.
   investmentXirr: false,
+  // Rollout: account tax classifications and missing classifications.
   investmentTaxBuckets: false,
   /** Reference adoption 9.7: user-supplied constituent look-through. */
+  // Rollout: manual holdings with incomplete constituent inputs.
   portfolioLookthrough: false,
   /** File drop, visible import steps, and keyboard focus transitions. */
+  // Rollout: drop, keyboard and complete CSV import.
   importWizard: false,
   /** Read-only CSV diagnostics; requires importProfiles. */
+  // Rollout: malformed, clean and duplicate CSV files.
   importPreflight: false,
   /** Saved CSV layouts; requires the import-profiles migration and acceptance. */
+  // Rollout: save and reuse layouts with owner isolation.
   importProfiles: false,
   /** Read-only committed batch history; requires the history migration. */
+  // Rollout: row counts and access isolation for committed batches.
   importHistory: false,
   /** Guarded removal of a committed import batch; requires importHistory. */
+  // Rollout: repeat undo and ledger consistency.
   importUndo: false,
+  // Rollout: notification rules, preferences and stable subject keys.
+  insightGenerators: false,
+  // Rollout: insight feed filtering and removal.
+  insightsFeed: false,
+  // Rollout: preview, applying rules and reapplying to older transactions.
+  compoundRules: false,
+  // Rollout: per-owner run log and retention.
+  ruleRunHistory: false,
+  // Rollout: confirmation, skip and duplicate handling.
+  ruleSuggestions: false,
+  // Rollout: detail and annotation round-trips.
+  transactionDetails: false,
+  /** Keyboard movement and row actions in the transaction ledger. */
+  // Rollout: keyboard-only ledger navigation and focus restoration.
+  ledgerKeyboardNavigation: false,
+  /** Multi-row transaction edits from the ledger toolbar. */
+  // Rollout: multi-row update, cancellation and owner checks.
+  bulkEdit: false,
+  /** Single-row inverse actions with an accessible undo toast. */
+  // Rollout: concurrent edits and previous-value restoration.
+  undoToasts: false,
+  /** User supplied loan schedules and amortization projections. */
+  // Rollout: zero-interest and early-payoff schedules.
+  amortizationEngine: false,
+  /** Detail schedule and strategy comparison on the debt page. */
+  // Rollout: loan schedule and scenario parity.
+  loanDetails: false,
   /**
    * Plaid Liabilities is a separately billed provider call.
    * Keep the daily cron call opt-in until quota and product access are approved.
    */
-  insightGenerators: false,
-  insightsFeed: false,
-  compoundRules: false,
-  ruleRunHistory: false,
-  ruleSuggestions: false,
-  transactionDetails: false,
-  /** Keyboard movement and row actions in the transaction ledger. */
-  ledgerKeyboardNavigation: false,
-  /** Multi-row transaction edits from the ledger toolbar. */
-  bulkEdit: false,
-  /** Single-row inverse actions with an accessible undo toast. */
-  undoToasts: false,
-  /** User supplied loan schedules and amortization projections. */
-  amortizationEngine: false,
-  /** Detail schedule and strategy comparison on the debt page. */
-  loanDetails: false,
+  // Rollout: confirm the separately billed Plaid Liabilities call and quota.
   liabilitiesSync: false,
   accountsPage: true,
   cashFlowPage: true,
@@ -91,24 +113,34 @@ export const FEATURE_FLAG_DEFAULTS = {
    */
   forecastingPage: true,
   /** Reference adoption 10.2: user-entered, seeded percentile projections. */
+  // Rollout: reproducible bounds and projection copy.
   forecastingMonteCarlo: false,
   /** Reference adoption 12.1: accessible household-owner attribution dots. */
+  // Rollout: mixed-owner household rendering and accessible owner labels.
   ownerAttributionDots: false,
   /** Reference adoption 12.2: aggregate-only household reports role. */
+  // Rollout: membership isolation and a discoverable report link.
   householdReportsOnly: false,
   /** Reference adoption 12.3: read-only scoped MCP projections. */
+  // Rollout: scoped tokens and truncation through the aggregates REST route.
   mcpEndpoint: false,
   /** Reference adoption 13.1: resumable first-run setup checklist and tour. */
+  // Rollout: fresh-account tour completion and dismissal.
   onboardingTour: false,
   /** Reference adoption 13.2: versioned in-app release highlights. */
+  // Rollout: current release content and first-visit dismissal.
   releaseHighlights: false,
   /** Reference adoption 13.3: pointer and keyboard layout controls. */
+  // Rollout: preference persistence and mobile widget order.
   dashboardWidgetLayout: false,
   /** Reference adoption 13.4: income-to-savings waterfall on Cash Flow. */
+  // Rollout: chart and table parity for both positive and negative cash flow.
   cashFlowWaterfall: false,
   /** Reference adoption 13.6: private PDF statement vault and coverage grid. */
+  // Rollout: upload, signed read, and erasure from private storage.
   statementVault: false,
   /** Reference adoption 13.7: goal progress ring, status, and projection. */
+  // Rollout: zero-target and completed-goal rendering.
   goalVisuals: false,
   /**
    * Phase 11. Released: `20260730230000_advice.sql` is applied, so the page's
@@ -137,67 +169,97 @@ export const FEATURE_FLAG_DEFAULTS = {
    * (like accounts) cascades across the schema and fails on missing plaid_items foreign keys.
    * Only user-authored config should be restorable in-app.
    */
+  // Rollout: retire the current restore path once the replacement format and migration plan are accepted.
   backupRestore: false,
   /**
    * Persistent transaction review (PR #166).
    * Off by default until migration is deployed and acceptance tests pass.
    */
+  // Rollout: manual entry, audit and concurrent annotation changes.
   transactionReview: false,
   /** Reference adoption 2.1: owner review of suspect raw observations. */
+  // Rollout: evidence, resolution, and correction provenance.
   balanceQualityReview: false,
   /** Reference adoption 2.2: all bank connections and their recovery action. */
+  // Rollout: repair, partial sync, and stale health across real institution types.
   connectionHealth: false,
   /** Reference adoption 2.3: durable source labels for account history. */
+  // Rollout: derived vs. imported history badges.
   historyProvenance: false,
   /** Reference adoption 3.1: funding across the next three declared pay periods. */
+  // Rollout: paydays crossing holidays, leap days and year boundaries.
   paycheckPlanner: false,
   /** Reference adoption 3.2: user-confirmed paydays, never silently inferred. */
+  // Rollout: validate and persist each supported frequency.
   paydaySettings: false,
   /** Reference adoption 3.3: monthly budget pace, separate from cash. */
+  // Rollout: zero spend, overspend, and end-of-month states.
   budgetDailyAllowance: false,
   /** Reference adoption 3.4: recurring bills list, calendar, and paycheck views. */
+  // Rollout: all supported list and calendar views.
   billsViews: false,
   /** Reference adoption 3.5: confirmed recurring price-change history. */
+  // Rollout: false positives, skipped charges and recurring streams.
   recurringPriceHistory: false,
   /** Reference adoption 3.6: user-authored subscription quick-add catalog. */
+  // Rollout: deduplication between manual and inferred subscriptions.
   subscriptionCatalog: false,
   /** Reference adoption 11.1: membership and card value terms model. */
+  // Rollout: membership data migrations and owner scope.
   membershipCardValueModel: false,
   /** Reference adoption 11.2: local membership and card value calculation. */
+  // Rollout: annual fee, credit limits and redemption examples.
   membershipCardValueCalculation: false,
   /** Reference adoption 11.3: user-maintained membership terms entry. */
+  // Rollout: manual terms update and reconciliation.
   membershipTermsEntry: false,
   /** Reference adoption 5.4: user-authored Plaid detailed-category mappings. */
+  // Rollout: mapping precedence and tenant isolation.
   plaidCategoryMappings: false,
   /** Reference adoption 5.5: local, bounded Bayes categorization. */
+  // Rollout: feedback capture and low-confidence fallback.
   bayesCategorization: false,
   /** Reference adoption 5.6: merchant directory and merge workflow. */
+  // Rollout: merchant merge and name changes without duplicate spend.
   merchantsPage: false,
   /** Reference adoption 6.5: scheduled rows projected above the ledger. */
+  // Rollout: projection marker and separation from posted totals.
   projectedLedgerRows: false,
   /** Reference adoption 6.6: transaction list/calendar view switcher. */
+  // Rollout: viewer timezone and date-only rows.
   transactionCalendar: false,
   /** Reference adoption 6.7: keyboard and floating quick-add transaction. */
+  // Rollout: keyboard submission and duplicate-submit prevention.
   quickAddTransaction: false,
   /** Reference adoption 6.8: named collections across categories, built on tags. */
+  // Rollout: membership edits and cross-user access checks.
   transactionCollections: false,
   /** Reference adoption 7.1: move planned money between category budgets. */
+  // Rollout: atomic movement, reversal and ledger integrity.
   budgetMoves: false,
   /** Reference adoption 7.2: warn when the budget allocates more than planned income. */
+  // Rollout: annualized-income and mixed-currency fixtures.
   budgetOverAllocation: false,
   /** Reference adoption 7.3: guided first budget from trailing averages. */
+  // Rollout: saved progress and cancellation.
   budgetSetupWizard: false,
   /** Reference adoption 9.1: typed manual assets with estimated growth. */
+  // Rollout: valuation and classification for each supported asset type.
   typedManualAssets: false,
   /** Reference adoption 9.2: valuation provenance and owned share in net worth. */
+  // Rollout: joint ownership and household scope.
   assetOwnership: false,
   /** Reference adoption 2.4: explainable duplicate, refund, and transfer suggestions. */
+  // Rollout: manual confirmation, decline and rerun.
   explainableMatchSuggestions: false,
   /** Reference adoption 4.3: the five-step weekly review ritual and streak. */
+  // Rollout: week boundaries, low-data states, and first run.
   weeklyReview: false,
   /** Reference adoption 8.3: owner-scoped private lending balances and payments. */
+  // Rollout: principal, payments and date-boundary examples.
   privateLending: false,
   /** Reference adoption 8.4: editable rent-buy, emergency-fund, and compound tools. */
+  // Rollout: projection inputs and output checks on small screens.
   planningCalculators: false,
   /**
    * Plaid time of day on transactions. Requires
@@ -205,6 +267,7 @@ export const FEATURE_FLAG_DEFAULTS = {
    * `datetime`/`authorized_datetime` and bill search reads them, so turning it
    * on before the migration is applied would fail every sync.
    */
+  // Rollout: apply the timestamp migration and verify existing rows and provider fallback.
   transactionTimes: false,
 } as const;
 

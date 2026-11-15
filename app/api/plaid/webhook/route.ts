@@ -1,17 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { getClientIp } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { isPlaidReconnectWarning, requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import { safeEqual } from "@/lib/crypto";
 import { getPlaidClient } from "@/lib/plaid";
 import { syncItemTransactions } from "@/lib/sync";
 import { refreshRecurringForItem } from "@/lib/recurring";
 import { refreshInferredRecurringForItem } from "@/lib/recurring-inference";
 import { syncInvestmentsForItem } from "@/lib/investment-sync";
-import { getItemByPlaidItemId, setItemStatus } from "@/lib/plaid-service";
+import { getItemByPlaidItemId, setItemStatus, setNewAccountsAvailable } from "@/lib/plaid-service";
 import { errorResponse, badRequest } from "@/lib/http";
 import { logError } from "@/lib/log";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 // Plaid webhook payloads are small JSON documents. Bound the unauthenticated
 // request body before signature verification so an attacker cannot make a
@@ -63,24 +67,44 @@ async function readWebhookBody(req: NextRequest): Promise<string | NextResponse>
  * never cached, so rotation falls through to a fresh fetch. Module-level →
  * per warm serverless instance, which is exactly the lifetime we want.
  */
-const webhookKeyCache = new Map<string, crypto.KeyObject>();
+const webhookKeyCache = new Map<string, { key: crypto.KeyObject | null; expires: number }>();
+const MAX_CACHED_KEYS = 128;
 
-async function getWebhookVerificationKey(kid: string): Promise<crypto.KeyObject> {
-  const cached = webhookKeyCache.get(kid);
-  if (cached) return cached;
-
-  const plaid = getPlaidClient();
-  const response = await plaid.webhookVerificationKeyGet({ key_id: kid });
-  const jwk = response.data.key;
-  const key = crypto.createPublicKey({
-    format: "jwk",
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    key: jwk as any,
-  });
-  if (!jwk.expired_at) {
-    webhookKeyCache.set(kid, key);
+function cacheWebhookKey(kid: string, key: crypto.KeyObject | null, ttl: number): void {
+  if (webhookKeyCache.size >= MAX_CACHED_KEYS) {
+    const oldest = webhookKeyCache.keys().next().value;
+    if (oldest !== undefined) webhookKeyCache.delete(oldest);
   }
-  return key;
+  webhookKeyCache.set(kid, { key, expires: Date.now() + ttl });
+}
+
+async function getWebhookVerificationKey(kid: string, request: NextRequest): Promise<crypto.KeyObject | null> {
+  const cached = webhookKeyCache.get(kid);
+  if (cached && cached.expires > Date.now()) return cached.key;
+  webhookKeyCache.delete(kid);
+
+  const ipHash = crypto.createHash("sha256").update(getClientIp(request) ?? "unknown").digest("hex");
+  if (!await checkRateLimit(`plaid-webhook-key:${ipHash}`, 30, 60, { failClosed: true })) return null;
+
+  try {
+    const response = await getPlaidClient().webhookVerificationKeyGet({ key_id: kid });
+    const jwk = response.data.key;
+    if (!jwk || jwk.expired_at) {
+      cacheWebhookKey(kid, null, 5 * 60_000);
+      return null;
+    }
+    const key = crypto.createPublicKey({ format: "jwk", key: { ...jwk } });
+    cacheWebhookKey(kid, key, 60 * 60_000);
+    return key;
+  } catch (error) {
+    const provider = (error as { response?: { status?: number; data?: { error_code?: string } } })?.response;
+    if (provider?.status === 400 || provider?.status === 404) {
+      cacheWebhookKey(kid, null, 5 * 60_000);
+    } else {
+      logError("webhook.key-fetch", "Verification key unavailable");
+    }
+    return null;
+  }
 }
 
 async function verifyPlaidWebhook(req: NextRequest, bodyText: string): Promise<boolean> {
@@ -105,35 +129,20 @@ async function verifyPlaidWebhook(req: NextRequest, bodyText: string): Promise<b
     const [headerB64, payloadB64, signatureB64] = parts;
     const header = JSON.parse(Buffer.from(headerB64, "base64url").toString("utf-8"));
     const { kid, alg } = header;
-    if (!kid) return false;
-    // Pin the algorithm Plaid documents; never trust an attacker-chosen alg.
-    if (alg !== "ES256") return false;
-
-    const publicKey = await getWebhookVerificationKey(kid);
-
-    // JWS ES256 signatures are raw r||s (IEEE P1363), not DER — Node's default.
-    // Without dsaEncoding, every genuine Plaid signature fails to verify.
-    const signingInput = `${headerB64}.${payloadB64}`;
-    const verified = crypto.verify(
-      "sha256",
-      Buffer.from(signingInput),
-      { key: publicKey, dsaEncoding: "ieee-p1363" },
-      Buffer.from(signatureB64, "base64url")
-    );
-
+    if (typeof kid !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(kid) || alg !== "ES256") return false;
+    const signature = Buffer.from(signatureB64, "base64url");
+    if (signature.length !== 64) return false;
     const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf-8"));
-    // Reject replayed webhooks: Plaid documents a 5-minute freshness window.
-    const issuedAt = typeof payload.iat === "number" ? payload.iat : 0;
-    if (Math.abs(Date.now() / 1000 - issuedAt) > 5 * 60) return false;
-
+    const issuedAt = payload.iat;
+    if (!Number.isFinite(issuedAt) || Math.abs(Date.now() / 1000 - issuedAt) > 5 * 60) return false;
     const bodyHash = crypto.createHash("sha256").update(bodyText).digest("hex");
-    const hashMatches =
-      typeof payload.request_body_sha256 === "string" &&
-      safeEqual(payload.request_body_sha256, bodyHash);
+    if (typeof payload.request_body_sha256 !== "string" || !safeEqual(payload.request_body_sha256, bodyHash)) return false;
 
-    return verified && hashMatches;
-  } catch (err) {
-    logError("webhook.verify", err);
+    const publicKey = await getWebhookVerificationKey(kid, req);
+    if (!publicKey) return false;
+    return crypto.verify("sha256", Buffer.from(`${headerB64}.${payloadB64}`),
+      { key: publicKey, dsaEncoding: "ieee-p1363" }, signature);
+  } catch {
     return false;
   }
 }
@@ -150,7 +159,7 @@ async function handleTransactionWebhook(body: {
     body.item_id.length === 0
   ) return;
   const item = await getItemByPlaidItemId(body.item_id);
-  if (!item) return;
+  if (!item || item.status === "disconnected") return;
   // Inference reads the canonical ledger, so it only runs once the sync that
   // populates that ledger has succeeded.
   await syncItemTransactions(item);
@@ -230,20 +239,43 @@ async function handleItemWebhook(body: {
     body.item_id.length === 0
   ) return;
   const item = await getItemByPlaidItemId(body.item_id);
-  if (!item) return;
+  if (!item || item.status === "disconnected") return;
   if (body.webhook_code === "ERROR") {
     const code =
       typeof body.error?.error_code === "string"
         ? body.error.error_code
         : "ITEM_ERROR";
-    await setItemStatus(item.user_id, item.id, "error", code);
-  } else if (body.webhook_code === "PENDING_EXPIRATION") {
-    await setItemStatus(item.user_id, item.id, "active", "PENDING_EXPIRATION");
+    if (requiresPlaidUserAction(code)) {
+      await setItemStatus(item.user_id, item.id, "error", code);
+    } else if (!requiresPlaidUserAction(item.error_code) && !isPlaidReconnectWarning(item.error_code)) {
+      await setItemStatus(item.user_id, item.id, item.status, code);
+    }
+  } else if (body.webhook_code === "PENDING_EXPIRATION" || body.webhook_code === "PENDING_DISCONNECT") {
+    if (item.status === "active") await setItemStatus(item.user_id, item.id, "active", body.webhook_code);
+  } else if (body.webhook_code === "NEW_ACCOUNTS_AVAILABLE") {
+    await setNewAccountsAvailable(item.user_id, item.id, true);
   } else if (body.webhook_code === "LOGIN_REPAIRED") {
     await setItemStatus(item.user_id, item.id, "active", null);
   } else if (body.webhook_code === "USER_PERMISSION_REVOKED") {
     await setItemStatus(item.user_id, item.id, "disconnected", "USER_PERMISSION_REVOKED");
   }
+}
+
+const HANDLED_WEBHOOKS = new Set([
+  "TRANSACTIONS:RECURRING_TRANSACTIONS_UPDATE",
+  "HOLDINGS:DEFAULT_UPDATE", "HOLDINGS:HISTORICAL_UPDATE",
+  "ITEM:ERROR", "ITEM:PENDING_EXPIRATION", "ITEM:PENDING_DISCONNECT",
+  "ITEM:NEW_ACCOUNTS_AVAILABLE", "ITEM:LOGIN_REPAIRED", "ITEM:USER_PERMISSION_REVOKED",
+]);
+const loggedWebhookCodes = new Set<string>();
+
+function logUnhandledWebhook(type: unknown, code: unknown): void {
+  if (typeof type !== "string" || typeof code !== "string" ||
+      !/^[A-Z0-9_]{1,64}$/.test(type) || !/^[A-Z0-9_]{1,64}$/.test(code)) return;
+  const pair = `${type}:${code}`;
+  if (HANDLED_WEBHOOKS.has(pair) || loggedWebhookCodes.has(pair) || loggedWebhookCodes.size >= 128) return;
+  loggedWebhookCodes.add(pair);
+  console.info("[webhook.unhandled]", pair);
 }
 
 /**
@@ -279,7 +311,11 @@ export async function POST(req: NextRequest) {
     // Holdings changed (or the initial historical pull finished): a bounded,
     // item-scoped refresh. Gated on investmentsPage — before its migration is
     // applied, `holdings` doesn't exist to write to.
-    await handleTransactionWebhook(body);
+    if (body.webhook_type === "TRANSACTIONS" && body.webhook_code === "SYNC_UPDATES_AVAILABLE") {
+      after(() => runBestEffortWebhookStep("webhook.transactions", () => handleTransactionWebhook(body)));
+      return NextResponse.json({ success: true });
+    }
+
     await handleRecurringWebhook(body);
     await handleHoldingsWebhook(body);
 
@@ -287,6 +323,7 @@ export async function POST(req: NextRequest) {
     // update-mode "Reconnect" flow, and clear the flag when Plaid says the
     // login was repaired on its own.
     await handleItemWebhook(body);
+    logUnhandledWebhook(body.webhook_type, body.webhook_code);
 
     return NextResponse.json({ success: true });
   } catch (err) {
