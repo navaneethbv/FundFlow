@@ -37,6 +37,8 @@ END $$;
 --     and read only by app/api/cron/backup/route.ts under the service key
 --     (20260905110000). No user-facing role has any business reading who was
 --     sent a backup and when.
+--   cron_delivery_windows — the scheduler delivery journal and heartbeats,
+--     owned by lib/cron-delivery.ts under the service role (20261115130000).
 DO $$
 DECLARE
   missing text;
@@ -48,9 +50,22 @@ BEGIN
   WHERE t.schemaname = 'public'
     AND t.rowsecurity = true
     AND p.policyname IS NULL
-    AND t.tablename <> ALL (ARRAY['rate_limit_counters', 'backup_deliveries']);
+    AND t.tablename <> ALL (ARRAY['rate_limit_counters', 'backup_deliveries', 'cron_delivery_windows']);
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'RLS-enabled tables with zero policies: %', missing;
+  END IF;
+END $$;
+
+-- The scheduler journal is service-only even if default public grants change.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY['anon', 'authenticated']) AS roles(role_name)
+    WHERE has_table_privilege(role_name, 'public.cron_delivery_windows', 'SELECT,INSERT,UPDATE,DELETE')
+       OR has_function_privilege(role_name, 'public.claim_cron_delivery(text,uuid,uuid,timestamptz)', 'EXECUTE')
+  ) THEN
+    RAISE EXCEPTION 'Client roles can reach the cron delivery journal';
   END IF;
 END $$;
 

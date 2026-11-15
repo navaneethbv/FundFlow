@@ -245,6 +245,65 @@ async function syncUsers(
   return { synced, failures, skipped };
 }
 
+async function loadBankSyncUsers(service: ReturnType<typeof createServiceClient>): Promise<Set<string>> {
+  const { data, error } = await service
+    .from("plaid_items")
+    .select("user_id")
+    .eq("status", "active");
+  if (error) throw error;
+
+  const { data: legacyErrors, error: legacyError } = await service
+    .from("plaid_items").select("user_id, error_code").eq("status", "error");
+  if (legacyError) throw legacyError;
+  const bankUserIds = new Set((data ?? []).map((r) => r.user_id as string));
+  for (const item of legacyErrors ?? []) {
+    if (item.error_code && !requiresPlaidUserAction(item.error_code)) bankUserIds.add(item.user_id as string);
+  }
+  return bankUserIds;
+}
+
+// Data-integrity checks are best-effort so maintenance results still report.
+async function reportIntegrityFindings(
+  service: ReturnType<typeof createServiceClient>,
+  userIds: string[],
+  deadline: number,
+): Promise<void> {
+  try {
+    const integrityFindings: string[] = [];
+    for (const userId of userIds) {
+      if (Date.now() >= deadline) break;
+      const [{ data: jobs }, txns, { data: accts }] = await Promise.all([
+        service
+          .from("sync_jobs")
+          .select("status, updated_at")
+          .eq("user_id", userId)
+          .eq("status", "running"),
+        loadUserTransactions(service, userId),
+        service.from("accounts").select("id").eq("user_id", userId),
+      ]);
+      const findings = runIntegrityChecks({
+        nowMs: Date.now(),
+        syncJobs: (jobs ?? []).map((j) => ({
+          status: j.status as string,
+          updatedAt: j.updated_at as string,
+        })),
+        transactions: txns,
+        accountIds: (accts ?? []).map((a) => a.id as string),
+      });
+      for (const finding of findings) integrityFindings.push(finding.detail);
+    }
+    if (integrityFindings.length > 0) {
+      await alertCronFailure("integrity", {
+        failed: integrityFindings.length,
+        total: userIds.length,
+        firstError: integrityFindings[0],
+      });
+    }
+  } catch (integrityErr) {
+    logError("cron.sync.integrity", integrityErr);
+  }
+}
+
 /**
  * Daily maintenance for all users, with bank sync for active connections.
  * Protected by CRON_SECRET: Vercel Cron sends "Authorization: Bearer <secret>"
@@ -257,59 +316,11 @@ export async function GET(request: NextRequest) {
   const deadline = Date.now() + (maxDuration - 45) * 1000;
   try {
     const service = createServiceClient();
-    const { data, error } = await service
-      .from("plaid_items")
-      .select("user_id")
-      .eq("status", "active");
-    if (error) throw error;
-
-    const { data: legacyErrors, error: legacyError } = await service
-      .from("plaid_items").select("user_id, error_code").eq("status", "error");
-    if (legacyError) throw legacyError;
-    const bankUserIds = new Set((data ?? []).map((r) => r.user_id as string));
-    for (const item of legacyErrors ?? []) {
-      if (item.error_code && !requiresPlaidUserAction(item.error_code)) bankUserIds.add(item.user_id as string);
-    }
+    const bankUserIds = await loadBankSyncUsers(service);
     const userIds = await loadMaintenanceUsers(service, bankUserIds);
     const { synced, failures, skipped } = await syncUsers(service, userIds, bankUserIds, deadline);
 
-    // Data-integrity pass (2.3, best-effort): stuck jobs, orphaned
-    // transactions, duplicate Plaid ids. Bounded queries per user; findings
-    // go to the admin through the same deduped alert rail as cron failures.
-    try {
-      const integrityFindings: string[] = [];
-      for (const userId of userIds) {
-        if (Date.now() >= deadline) break;
-        const [{ data: jobs }, txns, { data: accts }] = await Promise.all([
-          service
-            .from("sync_jobs")
-            .select("status, updated_at")
-            .eq("user_id", userId)
-            .eq("status", "running"),
-          loadUserTransactions(service, userId),
-          service.from("accounts").select("id").eq("user_id", userId),
-        ]);
-        const findings = runIntegrityChecks({
-          nowMs: Date.now(),
-          syncJobs: (jobs ?? []).map((j) => ({
-            status: j.status as string,
-            updatedAt: j.updated_at as string,
-          })),
-          transactions: txns,
-          accountIds: (accts ?? []).map((a) => a.id as string),
-        });
-        for (const finding of findings) integrityFindings.push(finding.detail);
-      }
-      if (integrityFindings.length > 0) {
-        await alertCronFailure("integrity", {
-          failed: integrityFindings.length,
-          total: userIds.length,
-          firstError: integrityFindings[0],
-        });
-      }
-    } catch (integrityErr) {
-      logError("cron.sync.integrity", integrityErr);
-    }
+    await reportIntegrityFindings(service, userIds, deadline);
 
     // Global counters contain no owner data; expired windows need no tombstones.
     const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
