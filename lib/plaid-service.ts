@@ -337,10 +337,12 @@ export async function setItemStatus(
     .update({ status, error_code: errorCode }).eq("id", itemDbId).eq("user_id", userId);
   // Sync is allowed to update the state it observed. A concurrent lifecycle
   // webhook (for example revoked consent) takes precedence.
-  const scoped = expected ? query.eq("status", expected.status) : query;
-  const matched = !expected ? scoped : expected.error_code === null
-    ? scoped.is("error_code", null)
-    : scoped.eq("error_code", expected.error_code);
+  let matched = expected ? query.eq("status", expected.status) : query;
+  if (expected) {
+    matched = expected.error_code === null
+      ? matched.is("error_code", null)
+      : matched.eq("error_code", expected.error_code);
+  }
   const { error } = await matched;
   if (error) throw error;
 }

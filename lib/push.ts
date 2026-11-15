@@ -61,29 +61,31 @@ export async function sendPushToUser(
 
     if (readError) throw readError;
 
-    for (const subscription of subscriptions ?? []) {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: subscription.endpoint as string,
-            keys: {
-              p256dh: subscription.p256dh as string,
-              auth: subscription.auth as string,
+    await Promise.all(
+      (subscriptions ?? []).map(async (subscription) => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: subscription.endpoint as string,
+              keys: {
+                p256dh: subscription.p256dh as string,
+                auth: subscription.auth as string,
+              },
             },
-          },
-          JSON.stringify({ title: payload.title.slice(0, 120), body: payload.body.slice(0, 240) }),
-        );
-      } catch (error) {
-        const statusCode = (error as { statusCode?: number }).statusCode;
-        if (statusCode === 404 || statusCode === 410) {
-          const { error: deleteError } = await service.from("push_subscriptions")
-            .delete().eq("id", subscription.id).eq("user_id", userId);
-          if (deleteError) logError("push.prune", deleteError);
-        } else {
-          logError("push.send", error);
+            JSON.stringify({ title: payload.title.slice(0, 120), body: payload.body.slice(0, 240) }),
+          );
+        } catch (error) {
+          const statusCode = (error as { statusCode?: number }).statusCode;
+          if (statusCode === 404 || statusCode === 410) {
+            const { error: deleteError } = await service.from("push_subscriptions")
+              .delete().eq("id", subscription.id).eq("user_id", userId);
+            if (deleteError) logError("push.prune", deleteError);
+          } else {
+            logError("push.send", error);
+          }
         }
-      }
-    }
+      }),
+    );
   } catch (error) {
     logError("push", error);
   }

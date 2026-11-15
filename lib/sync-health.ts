@@ -170,7 +170,7 @@ function productWarning(status: string, itemCode: string | null, jobCode: string
 
 function productFreshness(lastSuccessAt: string | null, lastAttemptAt: string | null, failed: boolean, now: number): ProductSyncState {
   const lastKnownSync = validTimestamp(lastSuccessAt ?? lastAttemptAt);
-  if (failed && lastKnownSync !== null && now - lastKnownSync > 72 * 3600_000) return "stale";
+  if (failed && lastKnownSync !== null && now - lastKnownSync > 72 * 3_600_000) return "stale";
   if (!lastSuccessAt) return "never_synced";
   const lastSuccess = validTimestamp(lastSuccessAt);
   return lastSuccess !== null && now - lastSuccess <= STALE_AFTER_MS ? "healthy" : "stale";

@@ -48,6 +48,78 @@ async function runOptionalSync(
   }
 }
 
+type DigestNotificationRow = {
+  type: string;
+  title: string;
+  body: string;
+  subject_key: string | null;
+};
+
+async function loadDigestNotifications(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+  since: string,
+  through: string,
+  digestEnabled: boolean,
+): Promise<DigestNotificationRow[]> {
+  const notifications: DigestNotificationRow[] = [];
+  const loadPage = async (offset: number): Promise<void> => {
+    const { data, error } = await service.from("notifications")
+      .select("type, title, body, subject_key").eq("user_id", userId)
+      .gt("created_at", since).lte("created_at", through)
+      .order("created_at").order("id").range(offset, offset + 999);
+    if (error) throw error;
+    const rows = (data ?? []) as DigestNotificationRow[];
+    notifications.push(...rows.filter((row) => digestEnabled
+      ? row.type !== "rule_match" && !(INSIGHT_TYPES as readonly string[]).includes(row.type)
+      : row.type === "broken_bank"));
+    if (rows.length >= 1000) return loadPage(offset + 1000);
+  };
+  await loadPage(0);
+  return notifications;
+}
+
+async function loadBrokenBankIssues(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+  itemIds: string[],
+): Promise<Map<string, ReturnType<typeof brokenBankDetails>>> {
+  const chunks: string[][] = [];
+  for (let offset = 0; offset < itemIds.length; offset += 100) {
+    chunks.push(itemIds.slice(offset, offset + 100));
+  }
+  const batches = await Promise.all(chunks.map(async (chunk) => {
+    const { data, error } = await service.from("plaid_items")
+      .select("id, institution_name, error_code").eq("user_id", userId).eq("status", "error")
+      .in("id", chunk);
+    if (error) throw error;
+    return data ?? [];
+  }));
+  const currentIssues = new Map<string, ReturnType<typeof brokenBankDetails>>();
+  for (const item of batches.flat()) {
+    if (requiresPlaidUserAction(item.error_code)) {
+      currentIssues.set(item.id, brokenBankDetails(item.institution_name, item.error_code));
+    }
+  }
+  return currentIssues;
+}
+
+function selectDeliverableAlerts(
+  notifications: DigestNotificationRow[],
+  currentIssues: Map<string, ReturnType<typeof brokenBankDetails>>,
+): Array<{ type: string; title: string; body: string }> {
+  const bankAlertsSeen = new Set<string>();
+  return notifications.flatMap(({ type, title, body, subject_key }) => {
+    if (type !== "broken_bank") return [{ type, title, body }];
+    const itemId = bankIdFromBrokenBankSubject(subject_key);
+    if (itemId === null || bankAlertsSeen.has(itemId)) return [];
+    const issue = currentIssues.get(itemId);
+    if (!issue) return [];
+    bankAlertsSeen.add(itemId);
+    return [{ type, ...issue }];
+  });
+}
+
 async function sendDailyDigest(
   service: ReturnType<typeof createServiceClient>,
   userId: string,
@@ -62,46 +134,18 @@ async function sendDailyDigest(
     if (profileError) throw profileError;
 
     await withCronDelivery(service, `digest:${userId}`, userId, todayStart.toISOString(), async (previous) => {
-      const floor = new Date(now.getTime() - 48 * 3600_000).toISOString();
+      const floor = new Date(now.getTime() - 48 * 3_600_000).toISOString();
       // Use the durable high-water mark, with a bounded catch-up window.
       const since = previous && previous > floor ? previous : floor;
-      const notifications = [];
-      for (let offset = 0; ; offset += 1000) {
-        const { data, error } = await service.from("notifications")
-          .select("type, title, body, subject_key").eq("user_id", userId)
-          .gt("created_at", since).lte("created_at", through)
-          .order("created_at").order("id").range(offset, offset + 999);
-        if (error) throw error;
-        const rows = data ?? [];
-        notifications.push(...rows.filter((row) => profile?.daily_digest_email_enabled === false
-          ? row.type === "broken_bank"
-          : row.type !== "rule_match" && !(INSIGHT_TYPES as readonly string[]).includes(row.type)));
-        if (rows.length < 1000) break;
-      }
+      const notifications = await loadDigestNotifications(
+        service, userId, since, through, profile?.daily_digest_email_enabled !== false,
+      );
       const itemIds = [...new Set(notifications
         .filter((row) => row.type === "broken_bank")
         .map((row) => bankIdFromBrokenBankSubject(row.subject_key))
         .filter((id): id is string => id !== null))];
-      const currentIssues = new Map<string, ReturnType<typeof brokenBankDetails>>();
-      for (let offset = 0; offset < itemIds.length; offset += 100) {
-        const { data, error } = await service.from("plaid_items")
-          .select("id, institution_name, error_code").eq("user_id", userId).eq("status", "error")
-          .in("id", itemIds.slice(offset, offset + 100));
-        if (error) throw error;
-        for (const item of data ?? []) {
-          if (requiresPlaidUserAction(item.error_code)) currentIssues.set(item.id, brokenBankDetails(item.institution_name, item.error_code));
-        }
-      }
-      const bankAlertsSeen = new Set<string>();
-      const deliverable = notifications.flatMap(({ type, title, body, subject_key }) => {
-        if (type !== "broken_bank") return [{ type, title, body }];
-        const itemId = bankIdFromBrokenBankSubject(subject_key);
-        if (itemId === null || bankAlertsSeen.has(itemId)) return [];
-        const issue = currentIssues.get(itemId);
-        if (!issue) return [];
-        bankAlertsSeen.add(itemId);
-        return [{ type, ...issue }];
-      });
+      const currentIssues = await loadBrokenBankIssues(service, userId, itemIds);
+      const deliverable = selectDeliverableAlerts(notifications, currentIssues);
       if (deliverable.length === 0) return null;
       const { data: userData, error: userError } = await service.auth.admin.getUserById(userId);
       if (userError) throw userError;
@@ -214,6 +258,30 @@ async function syncUser(
   return stepFailures;
 }
 
+async function processOneUser(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string,
+  hasBank: boolean,
+  deadline: number,
+  failures: string[],
+): Promise<boolean> {
+  try {
+    const userFailures = await syncUser(service, userId, hasBank, deadline);
+    const { error } = await service.from("profiles")
+      .update({ last_maintenance_at: new Date().toISOString() }).eq("id", userId);
+    if (error) userFailures.push(`cron.sync.maintenance-stamp: ${safeSyncError(error)}`);
+    if (userFailures.length) {
+      failures.push(userFailures.join("; "));
+      return false;
+    }
+    return true;
+  } catch (error) {
+    logError("cron.sync.user", error);
+    failures.push(safeSyncError(error));
+    return false;
+  }
+}
+
 async function syncUsers(
   service: ReturnType<typeof createServiceClient>,
   userIds: string[],
@@ -223,23 +291,15 @@ async function syncUsers(
   let next = 0;
   let synced = 0;
   const failures: string[] = [];
-  async function worker() {
-    while (next < userIds.length && Date.now() < deadline) {
-      const userId = userIds[next++]!;
-      try {
-        const userFailures = await syncUser(service, userId, bankUserIds.has(userId), deadline);
-        const { error } = await service.from("profiles")
-          .update({ last_maintenance_at: new Date().toISOString() }).eq("id", userId);
-        if (error) userFailures.push(`cron.sync.maintenance-stamp: ${safeSyncError(error)}`);
-        if (userFailures.length) failures.push(userFailures.join("; "));
-        else synced += 1;
-      } catch (error) {
-        logError("cron.sync.user", error);
-        failures.push(safeSyncError(error));
-      }
+  async function runNext(): Promise<void> {
+    if (next >= userIds.length || Date.now() >= deadline) return;
+    const userId = userIds[next++]!;
+    if (await processOneUser(service, userId, bankUserIds.has(userId), deadline, failures)) {
+      synced += 1;
     }
+    return runNext();
   }
-  await Promise.all([worker(), worker()]);
+  await Promise.all([runNext(), runNext()]);
   const skipped = userIds.length - next;
   if (skipped) failures.push(`DEADLINE_EXCEEDED: ${skipped} users skipped`);
   return { synced, failures, skipped };

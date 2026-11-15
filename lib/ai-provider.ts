@@ -194,13 +194,13 @@ export async function generateInsightsWithProvider(input: {
   if (!textBlock) throw new Error("ai-provider empty response");
 
   const parsed = JSON.parse(textBlock.text);
-  const kinds = INSIGHT_SCHEMA.properties.insights.items.properties.insight_type.enum;
+  const kinds: readonly string[] = INSIGHT_SCHEMA.properties.insights.items.properties.insight_type.enum;
   if (!Array.isArray(parsed?.insights) || parsed.insights.length > kinds.length) {
     throw new Error("Invalid AI insight output");
   }
   const insights: Array<{ insight_type: string; summary: string }> = parsed.insights;
   for (const insight of insights) {
-    if (!insight || !kinds.some((kind) => kind === insight.insight_type) || typeof insight.summary !== "string") {
+    if (!insight || !kinds.includes(insight.insight_type) || typeof insight.summary !== "string") {
       throw new Error("Invalid AI insight");
     }
   }

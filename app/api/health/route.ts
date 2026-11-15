@@ -5,12 +5,18 @@ import { logError } from "@/lib/log";
 export const dynamic = "force-dynamic";
 
 const HEALTH_CACHE_MS = 30_000;
+const HOUR_MS = 3_600_000;
 const SCHEDULER_THRESHOLDS = {
-  "scheduler:weekly-report": 26 * 3600_000,
-  "scheduler:backup": 35 * 24 * 3600_000,
+  "scheduler:weekly-report": 26 * HOUR_MS,
+  "scheduler:backup": 35 * 24 * HOUR_MS,
 };
 let cachedHealth: { until: number; status: number; payload: object } | undefined;
 let pendingHealth: Promise<{ status: number; payload: object }> | undefined;
+
+function schedulerStatus(age: number | null, limit: number): "unknown" | "stale" | "healthy" {
+  if (age === null) return "unknown";
+  return age > limit ? "stale" : "healthy";
+}
 
 async function checkHealth() {
   const startedAt = Date.now();
@@ -28,14 +34,14 @@ async function checkHealth() {
 
     const latencyMs = Math.round(performance.now() - checkStart);
     const lastSyncAgeHours = sync.data?.updated_at
-      ? Math.round((Date.now() - Date.parse(sync.data.updated_at as string)) / 3600_000) : null;
+      ? Math.round((Date.now() - Date.parse(sync.data.updated_at as string)) / HOUR_MS) : null;
     const now = Date.now();
     const checks = Object.fromEntries(Object.entries(SCHEDULER_THRESHOLDS).map(([key, limit]) => {
       const seen = scheduler.data?.find((run) => run.delivery_key === key)?.sent_through;
       const age = seen ? now - Date.parse(seen) : null;
       return [key.slice("scheduler:".length), {
-        status: age === null ? "unknown" : age > limit ? "stale" : "healthy",
-        ageHours: age === null ? null : Math.round(age / 3600_000),
+        status: schedulerStatus(age, limit),
+        ageHours: age === null ? null : Math.round(age / HOUR_MS),
       }];
     }));
     const degraded = (lastSyncAgeHours !== null && lastSyncAgeHours > 48) ||

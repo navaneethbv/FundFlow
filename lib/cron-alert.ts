@@ -11,7 +11,7 @@ export type { CronAlertSummary } from "@/lib/reporting";
 export async function alertCronFailure(cronName: string, summary: CronAlertSummary): Promise<void> {
   try {
     const service = createServiceClient();
-    const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const cutoff = new Date(Date.now() - 24 * 3_600_000).toISOString();
     await withCronDelivery(service, `cron-alert:${cronName}`, null, cutoff, async () => {
       const { data: admins, error } = await service.from("profiles")
         .select("id").eq("role", "admin").order("id").limit(1);

@@ -23,19 +23,20 @@ import { MAX_STEP_UP_ATTEMPTS_PER_HOUR, verifyStepUp } from "@/lib/step-up";
 async function removeUserPlaidItems(userId: string): Promise<{ removed: number; failed: number }> {
   const items = await listItemsForRemoval(userId);
   if (items.length === 0) return { removed: 0, failed: 0 };
-  let removed = 0;
-  let failed = 0;
-  for (const item of items) {
-    try {
-      await removeItemAtPlaid(item);
-      await setItemStatus(userId, item.id, "disconnected");
-      removed += 1;
-    } catch (error) {
-      failed += 1;
-      logError("account.delete.itemRemove", error);
-    }
-  }
-  return { removed, failed };
+  const outcomes = await Promise.all(
+    items.map(async (item) => {
+      try {
+        await removeItemAtPlaid(item);
+        await setItemStatus(userId, item.id, "disconnected");
+        return true;
+      } catch (error) {
+        logError("account.delete.itemRemove", error);
+        return false;
+      }
+    }),
+  );
+  const removed = outcomes.filter(Boolean).length;
+  return { removed, failed: outcomes.length - removed };
 }
 
 async function listAllBucketFiles(

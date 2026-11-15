@@ -20,24 +20,38 @@ export async function withCronDelivery(
   if (!data?.length) return;
 
   let sentThrough: string | null = null;
+  let deliverError: unknown;
+  let hasDeliverError = false;
   try {
     sentThrough = await deliver(data[0].sent_through);
-  } finally {
-    try {
-      const update = service.from("cron_delivery_windows").update({
-        claim_id: null,
-        claim_expires_at: null,
-        ...(sentThrough && { sent_through: sentThrough }),
-      }).eq("delivery_key", key).eq("claim_id", claimId);
-      const scoped = userId === null ? update.is("user_id", null) : update.eq("user_id", userId);
-      const { data: rows, error: updateError } = await scoped.select("delivery_key");
-      if (updateError) throw updateError;
-      if (!rows?.length) throw new Error("CRON_DELIVERY_CLAIM_LOST");
-    } catch (error) {
-      if (sentThrough) throw error;
+  } catch (error) {
+    deliverError = error;
+    hasDeliverError = true;
+  }
+
+  let releaseError: unknown;
+  let hasReleaseError = false;
+  try {
+    const update = service.from("cron_delivery_windows").update({
+      claim_id: null,
+      claim_expires_at: null,
+      ...(sentThrough && { sent_through: sentThrough }),
+    }).eq("delivery_key", key).eq("claim_id", claimId);
+    const scoped = userId === null ? update.is("user_id", null) : update.eq("user_id", userId);
+    const { data: rows, error: updateError } = await scoped.select("delivery_key");
+    if (updateError) throw updateError;
+    if (!rows?.length) throw new Error("CRON_DELIVERY_CLAIM_LOST");
+  } catch (error) {
+    if (sentThrough) {
+      releaseError = error;
+      hasReleaseError = true;
+    } else {
       logError("cron.delivery.release", error);
     }
   }
+
+  if (hasDeliverError) throw deliverError;
+  if (hasReleaseError) throw releaseError;
 }
 
 

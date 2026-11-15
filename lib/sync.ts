@@ -635,47 +635,67 @@ async function recordJobEnd(
   }
 }
 
+async function notifyBrokenBank(
+  userId: string,
+  item: PlaidItemRow,
+  code: string,
+): Promise<void> {
+  const timezone = await loadAlertTimezone(createServiceClient(), userId);
+  const today = dateKeyInTimezone(new Date(), timezone);
+  await createNotification(
+    userId,
+    "broken_bank",
+    brokenBankDetails(item.institution_name, code),
+    brokenBankSubjectKey(item.id, today),
+    "exact",
+  ).catch((err) => logError("sync.broken_bank_notification", err));
+}
+
+async function syncSingleItem(
+  userId: string,
+  item: PlaidItemRow,
+  deadline: number,
+  total: SyncResult,
+): Promise<void> {
+  const jobId = await recordJobStart(userId, item.id);
+  try {
+    const result = await syncItemTransactions(item, deadline);
+    total.added += result.added;
+    total.modified += result.modified;
+    total.removed += result.removed;
+    if (result === NOOP_RESULT) {
+      await recordJobEnd(jobId, userId, "failed", "SYNC_CLAIM_UNAVAILABLE");
+    } else {
+      await recordJobEnd(jobId, userId, "done");
+    }
+  } catch (error) {
+    logError("sync.item", error);
+    // Keep the real Plaid code (e.g. ITEM_LOGIN_REQUIRED) so Settings can
+    // offer the right fix (reconnect) instead of a generic failure.
+    const code = plaidErrorCode(error) ?? "sync_failed";
+    const needsUserAction = requiresPlaidUserAction(code);
+    const statusCode = !needsUserAction && isPlaidReconnectWarning(item.error_code) ? item.error_code : code;
+    await setItemStatus(item.user_id, item.id, needsUserAction ? "error" : "active", statusCode, item)
+      .catch((statusError) => logError("sync.item-status", statusError));
+    await recordJobEnd(jobId, userId, "failed", code);
+    if (needsUserAction) {
+      await notifyBrokenBank(userId, item, code);
+    }
+  }
+}
+
 /** Sync every active item for a user. Per-item failures are isolated. */
 export async function syncAllForUser(userId: string, deadline = Number.POSITIVE_INFINITY): Promise<SyncResult> {
   const items = await listActiveItems(userId, { retryTransient: true });
   const total: SyncResult = { added: 0, modified: 0, removed: 0 };
 
-  for (const item of items) {
-    if (Date.now() >= deadline) break;
-    const jobId = await recordJobStart(userId, item.id);
-    try {
-      const result = await syncItemTransactions(item, deadline);
-      total.added += result.added;
-      total.modified += result.modified;
-      total.removed += result.removed;
-      if (result === NOOP_RESULT) {
-        await recordJobEnd(jobId, userId, "failed", "SYNC_CLAIM_UNAVAILABLE");
-      } else {
-        await recordJobEnd(jobId, userId, "done");
-      }
-    } catch (error) {
-      logError("sync.item", error);
-      // Keep the real Plaid code (e.g. ITEM_LOGIN_REQUIRED) so Settings can
-      // offer the right fix (reconnect) instead of a generic failure.
-      const code = plaidErrorCode(error) ?? "sync_failed";
-      const needsUserAction = requiresPlaidUserAction(code);
-      const statusCode = !needsUserAction && isPlaidReconnectWarning(item.error_code) ? item.error_code : code;
-      await setItemStatus(item.user_id, item.id, needsUserAction ? "error" : "active", statusCode, item)
-        .catch((statusError) => logError("sync.item-status", statusError));
-      await recordJobEnd(jobId, userId, "failed", code);
-      if (!needsUserAction) continue;
+  const syncNext = async (index: number): Promise<void> => {
+    if (index >= items.length || Date.now() >= deadline) return;
+    await syncSingleItem(userId, items[index]!, deadline, total);
+    return syncNext(index + 1);
+  };
+  await syncNext(0);
 
-      const timezone = await loadAlertTimezone(createServiceClient(), userId);
-      const today = dateKeyInTimezone(new Date(), timezone);
-      await createNotification(
-        userId,
-        "broken_bank",
-        brokenBankDetails(item.institution_name, code),
-        brokenBankSubjectKey(item.id, today),
-        "exact",
-      ).catch((err) => logError("sync.broken_bank_notification", err));
-    }
-  }
   // Fresh transactions/balances just landed — drop this user's cached dashboard
   // so the next render recomputes instead of serving pre-sync numbers.
   invalidateDashboardCache(userId);
