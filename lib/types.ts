@@ -18,6 +18,7 @@ export interface PlaidItemRow {
   error_code: string | null;
   access_token_rotated_at?: string | null;
   last_sync_attempt_at?: string | null;
+  new_accounts_available?: boolean;
   last_sync_success_at?: string | null;
   last_sync_completed_pages?: boolean;
   initial_history_incomplete?: boolean;

@@ -11,6 +11,9 @@ export interface RentBuyInputs {
   rentGrowthApr: number;
   homeAppreciationApr: number;
   horizonYears: number;
+  sellingCostPct?: number;
+  investmentReturnApr?: number;
+  ownershipCostGrowthApr?: number;
 }
 
 export interface RentBuyResult {
@@ -46,25 +49,34 @@ export function calculateRentBuy(inputs: RentBuyInputs): RentBuyResult {
   const termMonths = Math.max(1, Math.round(inputs.termYears * 12));
   const monthlyMortgage = payment(principal, inputs.mortgageApr, termMonths);
   const horizonMonths = Math.max(0, Math.round(inputs.horizonYears * 12));
+  const sellingCostFraction = Math.min(100, Math.max(0, inputs.sellingCostPct ?? 0)) / 100;
+  const investmentRate = (inputs.investmentReturnApr ?? 0) / 1200;
+  const ownershipGrowth = (inputs.ownershipCostGrowthApr ?? 0) / 1200;
+  const downPayment = Math.max(0, inputs.downPayment);
+  const baseOwnershipCost = Math.max(0, inputs.propertyTaxMonthly) + Math.max(0, inputs.insuranceMonthly) + Math.max(0, inputs.maintenanceMonthly);
   let rentTotal = 0;
   let buyTotal = Math.max(0, inputs.downPayment) + Math.max(0, inputs.closingCosts);
   let breakEvenMonth: number | null = null;
   let homeValue = Math.max(0, inputs.homePrice);
+  let netBuyCost = buyTotal;
+  let equity = Math.max(0, homeValue - principal);
   for (let month = 1; month <= horizonMonths; month += 1) {
     const rent = Math.max(0, inputs.monthlyRent) * Math.pow(1 + inputs.rentGrowthApr / 100 / 12, month - 1);
     rentTotal += rent;
-    const ongoing = Math.max(0, inputs.propertyTaxMonthly) + Math.max(0, inputs.insuranceMonthly) + Math.max(0, inputs.maintenanceMonthly);
-    buyTotal += monthlyMortgage + ongoing;
+    const ongoing = baseOwnershipCost * Math.pow(1 + ownershipGrowth, month - 1);
+    buyTotal += (month <= termMonths ? monthlyMortgage : 0) + ongoing;
     homeValue *= 1 + inputs.homeAppreciationApr / 100 / 12;
-    const equity = Math.max(0, homeValue - remainingPrincipal(principal, inputs.mortgageApr, termMonths, month, monthlyMortgage));
-    if (breakEvenMonth === null && buyTotal - equity <= rentTotal) breakEvenMonth = month;
+    const remaining = remainingPrincipal(principal, inputs.mortgageApr, termMonths, month, monthlyMortgage);
+    equity = homeValue - remaining;
+    const sellingCosts = homeValue * sellingCostFraction;
+    const forgoneGrowth = downPayment * (Math.pow(1 + investmentRate, month) - 1);
+    netBuyCost = buyTotal - equity + sellingCosts + forgoneGrowth;
+    if (breakEvenMonth === null && netBuyCost <= rentTotal) breakEvenMonth = month;
   }
-  const remaining = remainingPrincipal(principal, inputs.mortgageApr, termMonths, horizonMonths, monthlyMortgage);
-  const equity = Math.max(0, homeValue - remaining);
   return {
     monthlyMortgage: round2(monthlyMortgage),
     rentCostAtHorizon: round2(rentTotal),
-    buyNetCostAtHorizon: round2(buyTotal - equity),
+    buyNetCostAtHorizon: round2(horizonMonths === 0 ? buyTotal - equity : netBuyCost),
     homeEquityAtHorizon: round2(equity),
     breakEvenMonth,
   };

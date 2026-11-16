@@ -288,7 +288,7 @@ describe("More API Routes Boost Suite", () => {
 
     it("handles tokens POST and DELETE", async () => {
       const client = clientStub({
-        api_tokens: { data: { id: "tok-1", name: "Test Token" } },
+        api_tokens: { data: [{ id: "tok-1", name: "Test Token" }] },
       });
       vi.spyOn(http, "requireUser").mockResolvedValue({
         user: { id: "u-1" } as never,

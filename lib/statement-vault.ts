@@ -1,3 +1,4 @@
+import { isValidDateKey } from "@/lib/date-utils";
 export const MAX_STATEMENT_BYTES = 15 * 1024 * 1024;
 export const STATEMENT_MONTHS = 12;
 
@@ -41,9 +42,7 @@ export function parseStatementAccountRef(value: unknown): StatementAccountRef | 
 }
 
 export function isStatementMonth(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-01$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  return isValidDateKey(value) && value.endsWith("-01");
 }
 
 export function recentStatementMonths(

@@ -6,7 +6,8 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getClientIp, writeAudit } from "@/lib/audit";
-import { addDays } from "@/lib/date-utils";
+import { resolveViewerToday } from "@/lib/report-period";
+import { addDays, isValidDateKey } from "@/lib/date-utils";
 import { loadCanonicalProjection } from "@/lib/finance-query";
 import {
   buildMcpAggregateRows,
@@ -16,7 +17,6 @@ import {
   type McpRecurringInput,
 } from "@/lib/mcp-projections";
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS = 366;
 const CATEGORY_MAX_LENGTH = 80;
 const RESOURCE_NAMES = ["aggregates", "rows"] as const;
@@ -29,30 +29,23 @@ interface McpRequestInput {
   category: string | null;
 }
 
-function isValidDate(value: unknown): value is string {
-  if (typeof value !== "string" || !DATE_RE.test(value)) return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return date.toISOString().slice(0, 10) === value;
-}
-
-function defaultPeriod(): { start: string; end: string } {
-  const end = new Date().toISOString().slice(0, 10);
+function defaultPeriod(end: string): { start: string; end: string } {
   const start = new Date(`${end}T00:00:00.000Z`);
   start.setUTCMonth(start.getUTCMonth() - 5, 1);
   return { start: start.toISOString().slice(0, 10), end };
 }
 
-function parseInput(value: Record<string, unknown>): McpRequestInput | NextResponse {
-  const defaults = defaultPeriod();
+function parseInput(value: Record<string, unknown>, today: string): McpRequestInput | NextResponse {
+  const defaults = value.start == null || value.end == null ? defaultPeriod(today) : null;
   const resource = value.resource ?? "aggregates";
-  const start = value.start ?? defaults.start;
-  const end = value.end ?? defaults.end;
+  const start = value.start ?? defaults?.start;
+  const end = value.end ?? defaults?.end;
   let category: string | null = null;
   if (typeof value.category === "string") category = value.category.trim() || null;
   if (!RESOURCE_NAMES.includes(resource as McpResource)) {
     return badRequest("resource must be aggregates or rows");
   }
-  if (!isValidDate(start) || !isValidDate(end)) {
+  if (!isValidDateKey(start) || !isValidDateKey(end)) {
     return badRequest("start and end must be valid YYYY-MM-DD dates");
   }
   if (end < start) return badRequest("end must not be before start");
@@ -128,6 +121,7 @@ async function loadAggregateProjection(
 
   return {
     period: { start: input.start, end: input.end },
+    truncated: projection.truncated,
     monthlyCategories: buildMcpAggregateRows(projection.transactions, input.category),
     budgets: ((budgetsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
       category: typeof row.category === "string" && row.category.trim()
@@ -146,12 +140,15 @@ async function loadAggregateProjection(
   };
 }
 
-async function handle(request: NextRequest, input: McpRequestInput): Promise<NextResponse> {
+async function handle(request: NextRequest, values: Record<string, unknown>): Promise<NextResponse> {
+  const explicitDates = values.start != null && values.end != null;
+  const explicit = explicitDates ? parseInput(values, "") : null;
+  if (explicit instanceof NextResponse) return explicit;
   const ip = getClientIp(request) ?? "unknown";
   if (!(await checkRateLimit(`mcp-ip:${ip}`, 60, 3600, { failClosed: true }))) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
-  const requiredScope: ApiTokenScope = input.resource === "rows" ? "mcp:export-rows" : "mcp:aggregates";
+  const requiredScope: ApiTokenScope = values.resource === "rows" ? "mcp:export-rows" : "mcp:aggregates";
   let token: Awaited<ReturnType<typeof verifyApiToken>>;
   try {
     token = await verifyApiToken(request.headers.get("authorization"), requiredScope);
@@ -164,6 +161,8 @@ async function handle(request: NextRequest, input: McpRequestInput): Promise<Nex
   }
 
   try {
+    const input = explicit ?? parseInput(values, await resolveViewerToday(createServiceClient(), token.userId));
+    if (input instanceof NextResponse) return input;
     if (input.resource === "rows") {
       const result = await fetchPrivacySafeRows(createServiceClient(), token.userId, {
         startDate: input.start,
@@ -201,16 +200,12 @@ async function handle(request: NextRequest, input: McpRequestInput): Promise<Nex
 export async function GET(request: NextRequest) {
   if (!isFeatureEnabled("mcpEndpoint")) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const query = Object.fromEntries(request.nextUrl.searchParams.entries());
-  const parsed = parseInput(query);
-  if (parsed instanceof NextResponse) return parsed;
-  return handle(request, parsed);
+  return handle(request, query);
 }
 
 export async function POST(request: NextRequest) {
   if (!isFeatureEnabled("mcpEndpoint")) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || Array.isArray(body)) return badRequest("JSON object required");
-  const parsed = parseInput(body);
-  if (parsed instanceof NextResponse) return parsed;
-  return handle(request, parsed);
+  return handle(request, body);
 }

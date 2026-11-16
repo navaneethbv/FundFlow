@@ -1,3 +1,14 @@
+vi.mock("@/lib/step-up", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/step-up")>();
+  return {
+    ...actual,
+    verifyStepUp: (supabase: Parameters<typeof actual.verifyStepUp>[0], user: Parameters<typeof actual.verifyStepUp>[1], code: string, factorId?: string) =>
+      actual.verifyStepUp(supabase, user, code, factorId, async (email, password) => {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        return !error;
+      }),
+  };
+});
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextResponse, NextRequest } from "next/server";
 import { clientStub } from "../fixtures/supabase-query";
@@ -51,6 +62,7 @@ const mockStoreLinkToken = vi.fn<(...args: unknown[]) => unknown>();
 const mockConsumeLinkToken = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock("@/lib/plaid-service", () => ({
+  listItemsForRemoval: (...args: unknown[]) => mockListActiveItems(...args),
   listActiveItems: (...args: unknown[]) => mockListActiveItems(...args),
   decryptItemToken: (...args: unknown[]) => mockDecryptItemToken(...args),
   getItem: (...args: unknown[]) => mockGetItem(...args),

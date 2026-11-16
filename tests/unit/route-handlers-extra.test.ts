@@ -141,7 +141,7 @@ describe("route handler edge cases", () => {
           }),
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
+              eq: vi.fn().mockReturnValue({ is: vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [{ id: "token-1" }], error: null }) }) }),
             }),
           }),
         }),

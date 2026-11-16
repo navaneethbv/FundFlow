@@ -16,7 +16,7 @@ import PlaidLinkLauncher from "@/components/PlaidLinkLauncher";
  * bank on every Settings visit — and left the button disabled, with no visible
  * reason, for the whole round trip.
  */
-export default function ReconnectBankButton({ itemId }: Readonly<{ itemId: string }>) {
+export default function ReconnectBankButton({ itemId, label = "Reconnect" }: Readonly<{ itemId: string; label?: string }>) {
   const router = useRouter();
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,7 +90,7 @@ export default function ReconnectBankButton({ itemId }: Readonly<{ itemId: strin
         variant="secondary"
         size="sm"
       >
-        {busy || linkToken ? "Opening..." : "Reconnect"}
+        {busy || linkToken ? "Opening..." : label}
       </Button>
       {error && <span className="text-xs text-danger">{error}</span>}
     </span>

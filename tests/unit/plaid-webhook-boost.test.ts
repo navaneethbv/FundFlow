@@ -1,6 +1,9 @@
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
+import { withWebhookWork } from "../fixtures/webhook-after";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { POST as webhookPost } from "@/app/api/plaid/webhook/route";
+import { POST as routePost } from "@/app/api/plaid/webhook/route";
+const webhookPost = withWebhookWork(routePost);
 import * as plaidService from "@/lib/plaid-service";
 import * as investmentSync from "@/lib/investment-sync";
 import * as featureFlags from "@/lib/feature-flags";
@@ -47,7 +50,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
     const origEnv = process.env.PLAID_ENV;
     try {
       process.env.PLAID_ENV = "sandbox";
-      const mockItem = { id: "item-db-1", user_id: "user-1", plaid_item_id: "plaid-item-1" };
+      const mockItem = { id: "item-db-1", user_id: "user-1", plaid_item_id: "plaid-item-1", status: "active" };
       vi.spyOn(plaidService, "getItemByPlaidItemId").mockResolvedValue(mockItem as never);
       const setStatusSpy = vi.spyOn(plaidService, "setItemStatus").mockResolvedValue();
 
@@ -61,7 +64,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
         }),
       });
       expect((await webhookPost(reqError)).status).toBe(200);
-      expect(setStatusSpy).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_ERROR");
+      expect(setStatusSpy).toHaveBeenCalledWith("user-1", "item-db-1", "active", "ITEM_ERROR");
 
       // PENDING_EXPIRATION
       const reqPending = new NextRequest("http://localhost/api/plaid/webhook", {
@@ -108,7 +111,7 @@ describe("Plaid Webhook Route Extra Branches", () => {
     try {
       process.env.PLAID_ENV = "sandbox";
       vi.spyOn(featureFlags, "isFeatureEnabled").mockReturnValue(true);
-      const mockItem = { id: "item-db-1", user_id: "user-1", plaid_item_id: "plaid-item-1" };
+      const mockItem = { id: "item-db-1", user_id: "user-1", plaid_item_id: "plaid-item-1", status: "active" };
       vi.spyOn(plaidService, "getItemByPlaidItemId").mockResolvedValue(mockItem as never);
       const syncInvestmentsSpy = vi.spyOn(investmentSync, "syncInvestmentsForItem").mockResolvedValue({
         outcome: "synced",

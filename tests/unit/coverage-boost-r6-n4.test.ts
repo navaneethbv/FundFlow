@@ -132,7 +132,7 @@ describe("coverage boost r6 n4: tokens route", () => {
     });
 
     it("revokes a token (L38 false, L45 false, L47, L49)", async () => {
-      const supabase = clientStub({ api_tokens: { data: null, error: null } });
+      const supabase = clientStub({ api_tokens: { data: [{ id: "tok1" }], error: null } });
       mockRequireUser.mockResolvedValue({ user: { id: "u1" }, supabase });
       const res = await tokensDelete(jsonRequest({ id: "tok1" }));
       expect(res.status).toBe(200);

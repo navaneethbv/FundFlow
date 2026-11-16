@@ -1,3 +1,5 @@
+import { addDays, parseDate } from "@/lib/date-utils";
+import { brokenBankDetails, brokenBankSubjectKey, requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { loadGeneratedInsights, persistGeneratedInsights } from "@/lib/insight-generation";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -56,7 +58,7 @@ async function notifyLowCashForecast(
       title: "Low cash forecast",
       body: `Your projected balance is expected to drop to a low of ${formatCurrency(forecast.lowestBalance)} in the next 30 days.`,
     },
-    `low_cash_forecast:${today}`,
+    `low_cash_forecast:${addDays(today, -((parseDate(today).getUTCDay() + 6) % 7))}`,
   );
 }
 
@@ -150,14 +152,11 @@ async function notifyBrokenBanks(
     .eq("user_id", userId);
 
   for (const item of items ?? []) {
-    if (item.status !== "error") continue;
+    if (item.status !== "error" || !requiresPlaidUserAction(item.error_code)) continue;
     await tryNotify(
       "broken_bank",
-      {
-        title: `Bank connection issue: ${item.institution_name || "Bank"}`,
-        body: `The connection to ${item.institution_name || "your bank"} needs to be updated (error: ${item.error_code || "unknown"}).`,
-      },
-      `broken_bank:${item.id}:${today}`,
+      brokenBankDetails(item.institution_name, item.error_code),
+      brokenBankSubjectKey(item.id, today),
     );
   }
 }

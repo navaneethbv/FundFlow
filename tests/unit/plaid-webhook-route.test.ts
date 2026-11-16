@@ -1,3 +1,5 @@
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
+import { withWebhookWork } from "../fixtures/webhook-after";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockGetItemByPlaidItemId = vi.fn();
@@ -40,7 +42,8 @@ vi.mock("@/lib/http", () => ({
   badRequest: (msg: string) => mockBadRequest(msg),
 }));
 
-import { POST } from "@/app/api/plaid/webhook/route";
+import { POST as routePost } from "@/app/api/plaid/webhook/route";
+const POST = withWebhookWork(routePost);
 import { NextRequest } from "next/server";
 
 describe("POST /api/plaid/webhook", () => {

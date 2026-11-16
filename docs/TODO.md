@@ -4,6 +4,16 @@ Source status checked October 16, 2026.
 Dated deployment, migration, and verification entries below describe their recorded checkpoints; they do not verify the current production environment.
 Remaining live acceptance and feature-flag decisions stay separate from a merged implementation.
 
+## Current review: repository review, 2026-11-15
+
+[The review](reviews/2026-11-15-repository-review.md) describes the original findings against `37908d5`. The follow-up on PR #239 implements the P1 and P2 code changes and the scoped P3 fixes in the handoff.
+
+- `20261115130000_cron_delivery_windows.sql` was applied to the production project on 2026-11-16 and recorded in the migration history; its table, columns, functions, and service-only grants were verified by query. `20261025090000_transaction_datetime.sql` remains unapplied, so the remote history skips that version and `transactionTimes` must stay off.
+- Discover and Fidelity report `ITEM_LOGIN_REQUIRED`. The account owner must finish Plaid Link update mode for each existing item. Verify the reconnect clears the item error and that the next sync runs successfully.
+- [Feature flag rollout review](FEATURE_FLAGS.md) records the acceptance criteria and retirement candidate. Review and staging acceptance are pending.
+- The owner-deferred signup decision, production transaction-time migration, and other items carried over from earlier reviews remain tracked in the review’s “Still open from earlier reviews” table.
+- Plaid 51 and web-push 4 require independent compatibility work. The tooling constraints for ESLint 10 and TypeScript 7 remain in Dependabot configuration.
+
 ## Bill search and transaction times, 2026-10-25
 
 `/transactions/search` (linked as "Find a bill" from the ledger header) finds a transaction by provider name or exact amount and shows date, time, provider, total, and the card or account that paid it.

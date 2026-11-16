@@ -1,3 +1,4 @@
+import { recordSchedulerRun } from "@/lib/cron-delivery";
 import { NextResponse, type NextRequest } from "next/server";
 import { errorResponse, requireCronAuth } from "@/lib/http";
 import { alertCronFailure } from "@/lib/cron-alert";
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   try {
+    await recordSchedulerRun("weekly-report");
     const result = await runWeeklyReports();
     if (result.reports_failed > 0) {
       await alertCronFailure("weekly-report", {

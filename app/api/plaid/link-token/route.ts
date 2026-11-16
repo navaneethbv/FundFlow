@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       }
       // Update mode: pass the access token, omit products.
       req.access_token = decryptItemToken(item);
+      if (item.new_accounts_available) req.update = { account_selection_enabled: true };
       delete (req as { products?: unknown }).products;
     } else {
       req.products = serverEnv.plaidProducts as unknown as Products[];

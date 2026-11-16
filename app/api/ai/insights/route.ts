@@ -1,3 +1,4 @@
+import { writeAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { generateAiInsightSummaries } from "@/lib/ai-insights";
 import {
@@ -26,6 +27,10 @@ export async function POST() {
         );
       }
       return NextResponse.json({ insights: [] });
+    }
+
+    if (!await checkRateLimit(`ai-insights-route:${user.id}`, 20, 24 * 3600, { failClosed: true })) {
+      return NextResponse.json({ error: "Daily insight generation limit reached." }, { status: 429 });
     }
 
     const exportResult = await fetchPrivacySafeRows(supabase, user.id, {
@@ -63,6 +68,7 @@ export async function POST() {
         }
       }
     }
+    const source = insights === null ? "fallback" : "provider";
     insights ??= generateAiInsightSummaries({ enabled: true, rows });
 
     const service = createServiceClient();
@@ -76,6 +82,7 @@ export async function POST() {
     );
     if (error) throw error;
 
+    await writeAudit({ userId: user.id, action: "ai_insights_generated", metadata: { source } });
     return NextResponse.json({ insights });
   } catch (error) {
     return errorResponse("ai.insights", error);

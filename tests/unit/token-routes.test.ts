@@ -171,7 +171,7 @@ describe("POST /api/tokens", () => {
   });
 
   it("revokes by stamping revoked_at and audits it", async () => {
-    const userClient = clientStub({ api_tokens: { error: null } });
+    const userClient = clientStub({ api_tokens: { data: [{ id: "t1" }] } });
     mockRequireUser.mockResolvedValue({ user: { id: USER }, supabase: userClient });
 
     const res = await tokensDelete(

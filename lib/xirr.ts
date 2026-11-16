@@ -1,11 +1,10 @@
+import { isValidDateKey } from "@/lib/date-utils";
 /** Investor cash flows: contributions negative, withdrawals/terminal value positive. */
 export interface DatedCashFlow { date: string; amount: number }
 export type XirrResult = { rate: number; method: "newton" | "bisection"; multipleRootsPossible: boolean } | null;
 
 export function validFinancialDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const time = Date.parse(`${value}T00:00:00Z`);
-  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+  return isValidDateKey(value);
 }
 
 type Term = { years: number; amount: number };

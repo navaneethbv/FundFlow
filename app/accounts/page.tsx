@@ -1,3 +1,4 @@
+import ReconnectBankButton from "@/components/settings/ReconnectBankButton";
 import { historyProvenance, HISTORY_PROVENANCE_LABELS, type HistoryProvenance } from "@/lib/history-provenance";
 import { manualAssetsEnabled, manualBalanceTable } from "@/lib/manual-asset-flags";
 import { loadCarriedReviews } from "@/lib/balance-quality-data";
@@ -223,6 +224,7 @@ export default async function AccountsPage({
     snapshotResult,
     itemResult,
     profileResult,
+    newAccountsResult,
   ] = await Promise.all([
     accountsQuery,
     manualQuery,
@@ -233,6 +235,8 @@ export default async function AccountsPage({
       .select("dashboard_prefs")
       .eq("id", user.id)
       .maybeSingle(),
+    supabase.from("plaid_items").select("id,institution_name").eq("user_id", user.id)
+      .eq("status", "active").eq("new_accounts_available", true).order("institution_name"),
   ]);
   assertQueryResults([
     accountsResult,
@@ -240,6 +244,7 @@ export default async function AccountsPage({
     snapshotResult,
     itemResult,
     profileResult,
+    newAccountsResult,
   ]);
 
   const institutionByItem = new Map(
@@ -387,6 +392,16 @@ export default async function AccountsPage({
         }
       />
 
+      {newAccountsResult.data?.length ? (
+        <ul className="mb-4 space-y-2">
+          {newAccountsResult.data.map((item) => (
+            <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-panel-border p-3">
+              <span>New accounts available at {item.institution_name ?? "your bank"}.</span>
+              <ReconnectBankButton itemId={item.id} label="Review new accounts" />
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <ManualAssetNotice />
       {visibleHouseholdIds.length > 0 && (
         <nav

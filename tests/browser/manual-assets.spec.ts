@@ -52,6 +52,8 @@ for (const width of [375, 1440]) for (const theme of ["light", "dark"]) {
       } else await route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}"><head><title>Assets</title><style>${css}</style></head><body><main style="padding:16px;max-width:900px;margin:auto"><h1>Manual assets</h1><div id="root"></div></main><script>window.asset=${JSON.stringify(saved) ?? "undefined"}</script></body></html>` });
     });
     await page.goto("http://fundflow.test/"); await page.addScriptTag({ content: script });
+    // Tab is pressed once and not retried, so the form must be rendered first.
+    await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
     await page.keyboard.press("Tab"); await expect(page.getByLabel("Name", { exact: true })).toBeFocused();
     await page.getByLabel("Name", { exact: true }).fill("Shared home");
     await page.getByLabel("Full value (USD)", { exact: true }).fill("200000");

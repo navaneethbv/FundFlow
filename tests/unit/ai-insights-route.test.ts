@@ -1,3 +1,4 @@
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockRequireUser = vi.fn();

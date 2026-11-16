@@ -5,12 +5,35 @@ PRs #225 and #226 merged on October 13, 2026; their pre-merge branch description
 Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
 A recorded deployment or local test result does not verify a later production build.
 
+## 2026-11-16: Review follow-up check and migration
+
+Each finding in [the review](reviews/2026-11-15-repository-review.md#implementation-status-2026-11-16-pr-239) was checked against PR #239; three small defects were fixed (claim contention recorded as a failed job, deadline-cut users stamped as maintained, import order in `lib/audit.ts`) and a render race in the manual-assets browser spec was removed.
+Typecheck, lint, and the unit suite (6,471 tests) passed locally, and all hosted checks passed on `0ecc6ce`.
+`20261115130000_cron_delivery_windows.sql` was applied to the production Supabase project in one transaction and verified by query: the journal table has RLS on with no client grants, the three functions are executable by the service role only, and both new columns exist.
+The remote migration history now ends at `20261115130000` and does not contain `20261025090000`.
+No live bank, email, or AI-provider flow was exercised.
+
+## 2026-11-15: Repository review follow-up
+
+The remediation adds recoverable Plaid sync failures, update-mode prompts for reconnect and new accounts, provider cleanup ahead of storage deletion, durable digest and cron-alert delivery windows, fair maintenance ordering, checked audit writes, and AI timeout, quota and retention controls. It also pins CI and updates local tooling, moves the read-only aggregates endpoint to `/api/v1/aggregates`, fixes the rent-versus-buy and zero-balance debt calculations, and reviews the dark flag backlog.
+
+The migration and owner acceptance gates are listed in [the tracker](TODO.md#current-review-repository-review-2026-11-15). The migration was exercised against an embedded PostgreSQL instance with a minimal schema and service-role privileges. Live Supabase, bank authentication, email delivery, and the separate major dependency upgrades require their own verification.
+
+## 2026-11-15: Repository review
+
+Documentation only: adds [the 2026-11-15 review](reviews/2026-11-15-repository-review.md) and a pointer in [the tracker](TODO.md#current-review-repository-review-2026-11-15).
+No source, migration, flag, dependency, or production state changed.
+Local gates on `main` at `37908d5`: typecheck, lint, palette validation, and the unit suite (579 files, 6,462 tests) passed; `npm audit --audit-level=high` passed with eight dev-only moderate advisories below the threshold.
+The production build, Playwright, and the integration suite were not run.
+`npx npm-check-updates` found six patch, six minor, and four major updates (`eslint` 10, `typescript` 7, `plaid` 51, `web-push` 4); none were applied so the gate results describe `main` unchanged.
+`graphify` is not installed in this environment, so the graph was neither queried nor updated.
+
 ## 2026-10-25: Bill search
 
 Adds `/transactions/search` and `lib/bill-search.ts`: a name or exact-amount lookup that returns date, time, provider, total, and the paying card, with every query filtered on `user_id`.
 Plaid's optional time of day is stored by the new `20261025090000_transaction_datetime.sql` behind the `transactionTimes` flag; rollout order is in [the tracker](TODO.md#bill-search-and-transaction-times-2026-10-25).
 Local validation: typecheck, lint, production build with placeholder public configuration, and the full unit suite passed.
-Minor and patch dependency bumps were applied; the `eslint` 10, `typescript` 7, `plaid` 49 and `@anthropic-ai/sdk` 1.x majors stay deferred for compatibility work.
+Minor and patch dependency bumps were applied; that checkpoint deferred ESLint 10 and TypeScript 7 for compatibility. Current major-version decisions are tracked in Dependabot configuration.
 
 ## 2026-10-13: Planning PR quality follow-up
 

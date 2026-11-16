@@ -1,98 +1,58 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clientStub } from "../fixtures/supabase-query";
+
+let service = clientStub();
+vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => service }));
 import { GET } from "@/app/api/health/route";
 
-const mockFrom = vi.fn();
-
-vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: () => ({
-    from: mockFrom,
-  }),
-}));
-
 describe("GET /api/health", () => {
+  let tick = 0;
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.UTC(2030, 0, 1) + tick++ * 60_000));
+    service = clientStub();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("reports database and sync health and caches concurrent and repeated polls", async () => {
+    service = clientStub({ sync_jobs: { data: { updated_at: new Date(Date.now() - 2 * 3600_000).toISOString() } } });
+    const responses = await Promise.all([GET(), GET(), GET()]);
+    expect(responses[0].status).toBe(200);
+    await expect(responses[0].json()).resolves.toMatchObject({
+      ok: true, db: true, status: "healthy", degraded: false, lastSyncAgeHours: 2,
+      checks: { database: { status: "connected" } },
+    });
+    await GET();
+    expect(service.from).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(30_000);
+    await GET();
+    expect(service.from).toHaveBeenCalledTimes(4);
   });
 
-  it("returns 200 and healthy status when database is reachable", async () => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { updated_at: twoHoursAgo },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      }),
+  it("flags stale scheduled workflows without exposing delivery rows", async () => {
+    service = clientStub({
+      cron_delivery_windows: { data: [{ delivery_key: "scheduler:weekly-report", sent_through: new Date(Date.now() - 28 * 3600_000).toISOString() }] },
     });
-
     const response = await GET();
     expect(response.status).toBe(200);
-
-    const json = await response.json();
-    expect(json.ok).toBe(true);
-    expect(json.db).toBe(true);
-    expect(json.status).toBe("healthy");
-    expect(json.degraded).toBe(false);
-    expect(json.lastSyncAgeHours).toBe(2);
-    expect(typeof json.responseMs).toBe("number");
-    expect(json.checks.database.status).toBe("connected");
+    await expect(response.json()).resolves.toMatchObject({
+      degraded: true,
+      checks: { scheduler: {
+        "weekly-report": { status: "stale", ageHours: 28 },
+        backup: { status: "unknown", ageHours: null },
+      } },
+    });
   });
 
-  it("flags degraded when last sync is older than 48 hours", async () => {
-    const sixtyHoursAgo = new Date(Date.now() - 60 * 3600000).toISOString();
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { updated_at: sixtyHoursAgo },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      }),
-    });
-
-    const response = await GET();
-    expect(response.status).toBe(200);
-
-    const json = await response.json();
-    expect(json.ok).toBe(true);
-    expect(json.db).toBe(true);
-    expect(json.status).toBe("degraded");
-    expect(json.degraded).toBe(true);
-    expect(json.lastSyncAgeHours).toBe(60);
+  it("flags a sync older than 48 hours", async () => {
+    service = clientStub({ sync_jobs: { data: { updated_at: new Date(Date.now() - 60 * 3600_000).toISOString() } } });
+    await expect((await GET()).json()).resolves.toMatchObject({ degraded: true, lastSyncAgeHours: 60 });
   });
 
-  it("returns 503 when database query fails", async () => {
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: null,
-                error: { message: "database offline" },
-              }),
-            }),
-          }),
-        }),
-      }),
-    });
-
+  it("returns 503 when the database query fails", async () => {
+    service = clientStub({ sync_jobs: { error: { message: "database offline" } } });
     const response = await GET();
     expect(response.status).toBe(503);
-
-    const json = await response.json();
-    expect(json.ok).toBe(false);
-    expect(json.db).toBe(false);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, db: false });
   });
 });

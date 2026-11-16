@@ -1,3 +1,4 @@
+import { resolveViewerToday } from "@/lib/report-period";
 import { NextResponse } from "next/server";
 import { requireUser, errorResponse } from "@/lib/http";
 import {
@@ -53,7 +54,7 @@ export async function POST() {
 
     const dataset = buildDemoDataset({
       userId: user.id,
-      today: new Date().toISOString().slice(0, 10),
+      today: await resolveViewerToday(supabase, user.id),
     });
 
     const service = createServiceClient();
@@ -95,7 +96,7 @@ export async function POST() {
 
     const snapshots = buildDemoAccountSnapshots({
       userId: user.id,
-      today: new Date().toISOString().slice(0, 10),
+      today: await resolveViewerToday(supabase, user.id),
       accounts: dataset.accounts,
       accountIds,
     });

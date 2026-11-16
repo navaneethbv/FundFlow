@@ -272,7 +272,7 @@ describe("coverage-boost-plaid-n3", () => {
       expect(res.status).toBe(401);
     });
 
-    it("continues even when Plaid itemRemove throws", async () => {
+    it("keeps local state when Plaid itemRemove throws", async () => {
       mockItemRemove.mockRejectedValue(new Error("plaid down"));
       serviceClient = ownedClient(null);
       const req = new NextRequest("http://localhost/api/plaid/disconnect", {
@@ -280,7 +280,7 @@ describe("coverage-boost-plaid-n3", () => {
         body: JSON.stringify({ item_id: "item-1" }),
       });
       const res = await disconnectPost(req);
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(503);
       expect(mockLogError).toHaveBeenCalledWith("plaid.disconnect.itemRemove", expect.any(Error));
     });
 

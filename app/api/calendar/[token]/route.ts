@@ -62,11 +62,14 @@ export async function GET(
       includeAmounts: Boolean(row.include_amounts),
     });
 
-    await writeAudit({
-      userId: row.user_id,
-      action: "calendar_feed_read",
-      metadata: { include_amounts: Boolean(row.include_amounts) },
-    });
+    const auditDay = new Date().toISOString().slice(0, 10);
+    if (await checkRateLimit(`calendar-audit:${tokenHash}:${auditDay}`, 1, 86_400, { failClosed: true })) {
+      await writeAudit({
+        userId: row.user_id,
+        action: "calendar_feed_read",
+        metadata: { include_amounts: Boolean(row.include_amounts) },
+      });
+    }
 
     return new NextResponse(ics, {
       status: 200,

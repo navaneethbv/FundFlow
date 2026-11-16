@@ -68,9 +68,9 @@ describe("isSessionRevoked", () => {
     expect(await isSessionRevoked(client, "u1")).toBe(false);
   });
 
-  it("returns false when the session id cannot be decoded", async () => {
+  it("fails closed when the session id cannot be decoded", async () => {
     const client = mockClient({ accessToken: null });
-    expect(await isSessionRevoked(client, "u1")).toBe(false);
+    expect(await isSessionRevoked(client, "u1")).toBe(true);
   });
 
   it("throws on lookup errors so page access fails closed", async () => {

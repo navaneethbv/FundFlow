@@ -1,4 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+vi.mock("@/lib/step-up", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/step-up")>();
+  return {
+    ...actual,
+    verifyStepUp: (supabase: Parameters<typeof actual.verifyStepUp>[0], user: Parameters<typeof actual.verifyStepUp>[1], code: string, factorId?: string) =>
+      actual.verifyStepUp(supabase, user, code, factorId, async (email, password) => {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        return !error;
+      }),
+  };
+});
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { clientStub } from "../fixtures/supabase-query";
 
 const mockRequireUser = vi.fn<(...args: unknown[]) => unknown>();
@@ -312,6 +323,12 @@ describe("/api/subscriptions/cancelled", () => {
 });
 
 describe("GET /api/health", () => {
+  let tick = 0;
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.UTC(2030, 0, 1) + tick++ * 60_000));
+  });
+  afterEach(() => vi.useRealTimers());
   it("reports ok with the last sync age", async () => {
     const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
     serviceClient = clientStub({ sync_jobs: { data: { updated_at: twoHoursAgo } } });
@@ -862,15 +879,16 @@ describe("DELETE /api/account", () => {
     expect(deleteUser).not.toHaveBeenCalled();
   });
 
-  it("treats ITEM_NOT_FOUND and INVALID_ACCESS_TOKEN as removed during Plaid item deletion", async () => {
+  it.each([true, false])("removes active and error items before storage cleanup (retry needed: %s)", async (retryNeeded) => {
     const deleteUser = vi.fn().mockResolvedValue({ error: null });
+    const storageFrom = vi.fn(() => ({ list: vi.fn().mockResolvedValue({ data: [], error: null }), remove: vi.fn().mockResolvedValue({ error: null }) }));
     const itemRemoveMock = vi
       .fn()
       .mockRejectedValueOnce({
         response: { data: { error_code: "ITEM_NOT_FOUND" } },
       })
       .mockRejectedValueOnce({
-        message: "Plaid error: INVALID_ACCESS_TOKEN",
+        message: retryNeeded ? "Plaid temporarily unavailable" : "Plaid error: INVALID_ACCESS_TOKEN",
       });
 
     const plaidModule = await import("@/lib/plaid");
@@ -904,7 +922,7 @@ describe("DELETE /api/account", () => {
               access_token_ciphertext: token2.ciphertext,
               access_token_iv: token2.iv,
               access_token_tag: token2.tag,
-              status: "active",
+              status: "error",
             },
           ],
         },
@@ -913,10 +931,7 @@ describe("DELETE /api/account", () => {
       {
         auth: { admin: { deleteUser } },
         storage: {
-          from: vi.fn(() => ({
-            list: vi.fn().mockResolvedValue({ data: [], error: null }),
-            remove: vi.fn().mockResolvedValue({ error: null }),
-          })),
+          from: storageFrom,
         },
       },
     );
@@ -933,9 +948,15 @@ describe("DELETE /api/account", () => {
 
     const res = await accountDelete(del("http://localhost/api/account", { code: "secret" }));
 
+    expect(itemRemoveMock).toHaveBeenCalledTimes(2);
+    if (retryNeeded) {
+      expect(res.status).toBe(503);
+      expect(deleteUser).not.toHaveBeenCalled();
+      expect(storageFrom).not.toHaveBeenCalled();
+      return;
+    }
     expect(res.status).toBe(200);
     expect(deleteUser).toHaveBeenCalledWith(USER);
-    expect(itemRemoveMock).toHaveBeenCalledTimes(2);
     expect(mockWriteAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "account_delete",

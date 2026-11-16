@@ -360,16 +360,18 @@ describe("dashboard linked_transfers message-match fallback", () => {
 });
 
 describe("verifyStepUp password verification branches", () => {
-  it("verifies password via test client with signInWithPassword", async () => {
+  it("uses the injected password verifier after the factor check", async () => {
     const { verifyStepUp } = await import("@/lib/step-up");
     const mockAuth = {
       mfa: { listFactors: vi.fn().mockResolvedValue({ data: { totp: [] }, error: null }) },
-      signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+      signInWithPassword: vi.fn<(_: { email: string; password: string }) => Promise<{ error: Error | null }>>().mockResolvedValue({ error: null }),
     };
     const res = await verifyStepUp(
       { auth: mockAuth } as never,
       { id: "u1", email: "test@example.com" } as never,
       "secret-password",
+      undefined,
+      async (email, password) => !(await mockAuth.signInWithPassword({ email, password })).error,
     );
     expect(res).toBe(true);
     expect(mockAuth.signInWithPassword).toHaveBeenCalledWith({
@@ -379,12 +381,14 @@ describe("verifyStepUp password verification branches", () => {
 
     const mockAuthFail = {
       mfa: { listFactors: vi.fn().mockResolvedValue({ data: { totp: [] }, error: null }) },
-      signInWithPassword: vi.fn().mockResolvedValue({ error: new Error("bad password") }),
+      signInWithPassword: vi.fn<(_: { email: string; password: string }) => Promise<{ error: Error | null }>>().mockResolvedValue({ error: new Error("bad password") }),
     };
     const resFail = await verifyStepUp(
       { auth: mockAuthFail } as never,
       { id: "u1", email: "test@example.com" } as never,
       "wrong-password",
+      undefined,
+      async (email, password) => !(await mockAuthFail.signInWithPassword({ email, password })).error,
     );
     expect(resFail).toBe(false);
   });

@@ -129,7 +129,7 @@ export function buildPayoffSchedule(input: PayoffPlanInput): ScheduledPayoffPlan
     name: debt.name,
     balance: round2(debt.balance),
     monthlyRate: debt.apr / 100 / 12,
-    minPayment: round2(debt.minPayment ?? Math.max(25, debt.balance * 0.02)),
+    minPayment: round2(debt.minPayment ?? (debt.balance > 0 ? Math.max(25, debt.balance * 0.02) : 0)),
     interestPaid: 0,
     payoffMonth: 0,
   }));

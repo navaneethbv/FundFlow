@@ -39,6 +39,13 @@ describe("lib/audit", () => {
       });
     });
 
+    it("logs database errors returned by the insert", async () => {
+      const error = { message: "Rejected audit row" };
+      mockInsert.mockResolvedValue({ error });
+      await expect(writeAudit({ userId: "user-123", action: "login" })).resolves.toBeUndefined();
+      expect(mockLogError).toHaveBeenCalledWith("audit.write", error);
+    });
+
     it("catches and logs errors without throwing", async () => {
       mockInsert.mockRejectedValue(new Error("DB insertion error"));
 

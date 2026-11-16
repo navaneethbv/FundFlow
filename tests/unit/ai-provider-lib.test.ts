@@ -246,7 +246,7 @@ describe("generateInsightsWithProvider", () => {
 
   it("throws on a refusal so the caller can fall back", async () => {
     mockMessagesCreate.mockResolvedValue({ stop_reason: "refusal", content: [] });
-    await expect(generateInsightsWithProvider({ rows })).rejects.toThrow("refusal");
+    await expect(generateInsightsWithProvider({ rows })).rejects.toThrow("AI insight output was incomplete");
   });
 
   it("throws when the response carries no text block", async () => {

@@ -15,15 +15,8 @@ import {
   type StoredCompoundRule,
 } from "@/lib/compound-rule-service";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache";
-import { parseDate, isoDate } from "@/lib/date-utils";
+import { isValidDateKey } from "@/lib/date-utils";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function validDate(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    isoDate(parseDate(value)) === value
-  );
-}
 export async function GET() {
   try {
     const auth = await requireUser();
@@ -66,7 +59,7 @@ async function evaluateRules(
   auth: Exclude<Awaited<ReturnType<typeof requireUser>>, Response>,
   req: NextRequest,
 ) {
-  if (!validDate(value.start) || !validDate(value.end) || value.start > value.end)
+  if (!isValidDateKey(value.start) || !isValidDateKey(value.end) || value.start > value.end)
     return badRequest("Choose a valid date range");
   const candidates = await loadRuleCandidates(auth.supabase, auth.user.id, {
     start: value.start,

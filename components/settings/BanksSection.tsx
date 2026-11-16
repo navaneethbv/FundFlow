@@ -1,5 +1,6 @@
 "use client";
 
+import { isPlaidReconnectWarning, requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,12 +19,13 @@ interface Item {
   institution_name: string | null;
   status: string;
   error_code: string | null;
+  new_accounts_available?: boolean;
   shared_household_id?: string | null;
 }
 
 /** Broken now (status error) or breaking soon (consent expiring). */
 function needsReconnect(item: Item): boolean {
-  return item.status === "error" || item.error_code === "PENDING_EXPIRATION";
+  return (item.status === "error" && requiresPlaidUserAction(item.error_code)) || isPlaidReconnectWarning(item.error_code);
 }
 
 function getHealthLabel(state: ProductSyncState): string {
@@ -210,7 +212,7 @@ export default function BanksSection({
                 <span className="block break-words font-semibold">
                   {i.institution_name ?? "Bank"}
                 </span>
-                {i.error_code === "PENDING_EXPIRATION" && (
+                {isPlaidReconnectWarning(i.error_code) && (
                   <span className="text-xs text-warning">Consent expiring soon</span>
                 )}
                 {health && (
@@ -257,7 +259,7 @@ export default function BanksSection({
                 <Badge tone={i.status === "active" ? "success" : "danger"}>
                   {i.status === "active" ? "Connected" : i.status}
                 </Badge>
-                {needsReconnect(i) && <ReconnectBankButton itemId={i.id} />}
+                {(needsReconnect(i) || i.new_accounts_available) && <ReconnectBankButton itemId={i.id} label={i.new_accounts_available ? "Review new accounts" : undefined} />}
                 <RepairBankButton itemId={i.id} />
                 <Button
                   onClick={() => {

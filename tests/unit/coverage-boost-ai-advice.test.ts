@@ -261,7 +261,7 @@ describe("ai/ask route", () => {
 
     mocks.mockMessagesCreate.mockRejectedValue(new Error("anthropic down"));
     const catchRes = await aiAskPost(jsonRequest("x", "POST", { question: "hi" }));
-    expect(catchRes.status).toBe(500);
+    expect(catchRes.status).toBe(503);
   });
 });
 
@@ -304,7 +304,7 @@ describe("ai/insights route", () => {
         { date: "2026-07-01", merchant: "Paycheck", category: "Income", amount: -100 },
       ],
     });
-    mocks.mockCheckRateLimit.mockResolvedValue(false);
+    mocks.mockCheckRateLimit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     const res = await aiInsightsPost();
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -414,6 +414,6 @@ describe("ai/receipt route", () => {
     expect((await aiReceiptPost(formRequest([["file", pngFile()]]))).status).toBe(422);
 
     mocks.mockMessagesCreate.mockRejectedValue(new Error("vision down"));
-    expect((await aiReceiptPost(formRequest([["file", pngFile()]]))).status).toBe(500);
+    expect((await aiReceiptPost(formRequest([["file", pngFile()]]))).status).toBe(503);
   });
 });

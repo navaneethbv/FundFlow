@@ -208,19 +208,18 @@ describe("POST /api/ai/ask", () => {
 
   it("429s once the daily question limit is spent", async () => {
     consentingUser();
-    mockCheckRateLimit.mockResolvedValue(false);
+    mockCheckRateLimit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
     const res = await askPost(askRequest("where did it go?"));
 
     expect(res.status).toBe(429);
     expect(mockCheckRateLimit).toHaveBeenCalledWith(
-      `ai-ask:${USER}`,
+      expect.stringMatching(new RegExp(`^ai-ask:${USER}:\\d{4}-\\d{2}-\\d{2}$`)),
       10,
       24 * 3600,
       { failClosed: true },
     );
     expect(mockMessagesCreate).not.toHaveBeenCalled();
-    expect(mockFetchRows).not.toHaveBeenCalled();
   });
 
   it("answers from aggregates and never sends raw rows", async () => {
@@ -321,13 +320,13 @@ describe("POST /api/ai/receipt", () => {
 
   it("429s once the daily scan limit is spent", async () => {
     scanningUser();
-    mockCheckRateLimit.mockResolvedValue(false);
+    mockCheckRateLimit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
     const res = await receiptPost(receiptRequest(image()));
 
     expect(res.status).toBe(429);
     expect(mockCheckRateLimit).toHaveBeenCalledWith(
-      `ai-receipt:${USER}`,
+      expect.stringMatching(new RegExp(`^ai-receipt:${USER}:\\d{4}-\\d{2}-\\d{2}$`)),
       10,
       24 * 3600,
       { failClosed: true },
@@ -354,6 +353,7 @@ describe("POST /api/ai/receipt", () => {
     );
     expect(res.status).toBe(400);
     expect(mockMessagesCreate).not.toHaveBeenCalled();
+    expect(mockCheckRateLimit).not.toHaveBeenCalled();
   });
 
   it("extracts the receipt and matches it to a ledger row", async () => {
@@ -430,7 +430,7 @@ describe("POST /api/ai/receipt", () => {
         JSON.stringify({
           merchant: "Cafe",
           amount: 24.5,
-          date: "unknown",
+          date: "2026-13-45",
           line_items: [],
         }),
       ),
@@ -448,11 +448,14 @@ describe("POST /api/ai/receipt", () => {
     expect(res.status).toBe(422);
   });
 
-  it("throws error when messages.create fails", async () => {
+  it("returns 503 and refunds quota when the provider fails", async () => {
     scanningUser();
     mockMessagesCreate.mockRejectedValue(new Error("AI API Error"));
 
-    await expect(receiptPost(receiptRequest(image()))).rejects.toThrow("AI API Error");
+    expect((await receiptPost(receiptRequest(image()))).status).toBe(503);
+    expect(serviceClient.callsOnRpc("refund_ai_rate_limit")).toEqual([
+      [{ p_key: expect.stringContaining(`ai-receipt:${USER}:`) }],
+    ]);
   });
 
   it("handles unauthorized, missing text block, and null candidates list", async () => {
@@ -463,7 +466,7 @@ describe("POST /api/ai/receipt", () => {
     // Missing text block
     scanningUser();
     mockMessagesCreate.mockResolvedValue({ stop_reason: "end_turn", content: [] });
-    await expect(receiptPost(receiptRequest(image()))).rejects.toThrow("receipt: empty response");
+    expect((await receiptPost(receiptRequest(image()))).status).toBe(503);
 
     // Null candidates list from supabase query
     const clientNullCandidates = {

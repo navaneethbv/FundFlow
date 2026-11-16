@@ -275,7 +275,7 @@ describe("API Route Handlers Unit Tests", () => {
 
     it("DELETE revokes token when id is provided", async () => {
       const db = clientStub({
-        api_tokens: { data: {} },
+        api_tokens: { data: [{ id: "tok-1" }] },
       });
       mockRequireUser.mockResolvedValue({
         user: { id: "user-1" },

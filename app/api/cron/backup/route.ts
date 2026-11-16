@@ -1,3 +1,4 @@
+import { recordSchedulerRun } from "@/lib/cron-delivery";
 import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -282,6 +283,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const service = createServiceClient();
+    await recordSchedulerRun("backup", service);
     const profiles = await fetchAllProfileIds(service);
 
     const today = new Date().toISOString().slice(0, 10);

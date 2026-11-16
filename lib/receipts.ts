@@ -1,3 +1,4 @@
+import { isValidDateKey } from "@/lib/date-utils";
 export interface ReceiptMatchInput {
   merchant: string;
   total: number;
@@ -47,12 +48,7 @@ export function receiptAmountBandFilter(total: number): string {
 }
 
 function parseIsoDay(value: string): number | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-  const timestamp = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return new Date(timestamp).toISOString().slice(0, 10) === value
-    ? timestamp
-    : null;
+  return isValidDateKey(value) ? Date.parse(value) : null;
 }
 
 function merchantTokens(value: string): Set<string> {

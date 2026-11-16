@@ -1,4 +1,5 @@
 import "server-only";
+import { requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import { createHash } from "node:crypto";
 import type { AccountBase } from "plaid";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -9,7 +10,7 @@ import type { PlaidItemRow } from "@/lib/types";
 import { logError } from "@/lib/log";
 
 const ITEM_COLUMNS =
-  "id, user_id, plaid_item_id, institution_id, institution_name, institution_logo, institution_brand_color, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, repair_sync_cursor, repair_sync_started_at, status, error_code, access_token_rotated_at, last_sync_attempt_at, last_sync_success_at, last_sync_completed_pages, initial_history_incomplete, cursor_reset_detected_at";
+  "id, user_id, plaid_item_id, institution_id, institution_name, institution_logo, institution_brand_color, access_token_ciphertext, access_token_iv, access_token_tag, sync_cursor, repair_sync_cursor, repair_sync_started_at, status, error_code, access_token_rotated_at, last_sync_attempt_at, last_sync_success_at, last_sync_completed_pages, initial_history_incomplete, cursor_reset_detected_at, new_accounts_available";
 
 /** How often an item's Plaid access token is rotated. */
 export const TOKEN_ROTATION_DAYS = 30;
@@ -112,13 +113,28 @@ export async function getItemByPlaidItemId(
 }
 
 /** Load all active items for a user (scoped by user_id). */
-export async function listActiveItems(userId: string): Promise<PlaidItemRow[]> {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
+export async function listActiveItems(
+  userId: string,
+  options?: { retryTransient?: boolean },
+): Promise<PlaidItemRow[]> {
+  const query = createServiceClient().from("plaid_items").select(ITEM_COLUMNS).eq("user_id", userId);
+  const { data, error } = await (options?.retryTransient
+    ? query.in("status", ["active", "error"])
+    : query.eq("status", "active"));
+  if (error) throw error;
+  const items = (data ?? []) as PlaidItemRow[];
+  return options?.retryTransient
+    ? items.filter((item) => item.status === "active" || (item.status === "error" && item.error_code && !requiresPlaidUserAction(item.error_code)))
+    : items;
+}
+
+/** Load every item that may still have a provider connection. */
+export async function listItemsForRemoval(userId: string): Promise<PlaidItemRow[]> {
+  const { data, error } = await createServiceClient()
     .from("plaid_items")
     .select(ITEM_COLUMNS)
     .eq("user_id", userId)
-    .eq("status", "active");
+    .in("status", ["active", "error"]);
   if (error) throw error;
   return (data ?? []) as PlaidItemRow[];
 }
@@ -315,13 +331,25 @@ export async function setItemStatus(
   itemDbId: string,
   status: PlaidItemRow["status"],
   errorCode: string | null = null,
+  expected?: Pick<PlaidItemRow, "status" | "error_code">,
 ): Promise<void> {
-  const supabase = createServiceClient();
-  const { error } = await supabase
-    .from("plaid_items")
-    .update({ status, error_code: errorCode })
-    .eq("id", itemDbId)
-    .eq("user_id", userId);
+  const query = createServiceClient().from("plaid_items")
+    .update({ status, error_code: errorCode }).eq("id", itemDbId).eq("user_id", userId);
+  // Sync is allowed to update the state it observed. A concurrent lifecycle
+  // webhook (for example revoked consent) takes precedence.
+  let matched = expected ? query.eq("status", expected.status) : query;
+  if (expected) {
+    matched = expected.error_code === null
+      ? matched.is("error_code", null)
+      : matched.eq("error_code", expected.error_code);
+  }
+  const { error } = await matched;
+  if (error) throw error;
+}
+
+export async function setNewAccountsAvailable(userId: string, itemId: string, available: boolean): Promise<void> {
+  const { error } = await createServiceClient().from("plaid_items")
+    .update({ new_accounts_available: available }).eq("id", itemId).eq("user_id", userId);
   if (error) throw error;
 }
 

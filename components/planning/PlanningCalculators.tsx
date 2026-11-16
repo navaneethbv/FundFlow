@@ -11,7 +11,7 @@ function NumberField({ label, value, onChange, min = 0, step = "0.01" }: Readonl
 }
 
 export default function PlanningCalculators({ essentialMonthlySpend, currentSavings }: Readonly<{ essentialMonthlySpend: number; currentSavings: number }>) {
-  const [rent, setRent] = useState<RentBuyInputs>({ homePrice: 400000, downPayment: 80000, mortgageApr: 6.5, termYears: 30, propertyTaxMonthly: 400, insuranceMonthly: 150, maintenanceMonthly: 300, closingCosts: 12000, monthlyRent: 2400, rentGrowthApr: 3, homeAppreciationApr: 3, horizonYears: 10 });
+  const [rent, setRent] = useState<RentBuyInputs>({ homePrice: 400000, downPayment: 80000, mortgageApr: 6.5, termYears: 30, propertyTaxMonthly: 400, insuranceMonthly: 150, maintenanceMonthly: 300, closingCosts: 12000, monthlyRent: 2400, rentGrowthApr: 3, homeAppreciationApr: 3, horizonYears: 10, sellingCostPct: 6, investmentReturnApr: 5, ownershipCostGrowthApr: 3 });
   const [rentResult, setRentResult] = useState(() => calculateRentBuy(rent));
   const [emergency, setEmergency] = useState<EmergencyFundInputs>({ essentialMonthlySpend, targetMonths: 6, currentSavings });
   const [emergencyResult, setEmergencyResult] = useState(() => calculateEmergencyFund(emergency));
@@ -34,11 +34,14 @@ export default function PlanningCalculators({ essentialMonthlySpend, currentSavi
         <NumberField label="Monthly rent" value={rent.monthlyRent} onChange={updateRent("monthlyRent")} />
         <NumberField label="Rent growth %" value={rent.rentGrowthApr} onChange={updateRent("rentGrowthApr")} />
         <NumberField label="Home appreciation %" value={rent.homeAppreciationApr} onChange={updateRent("homeAppreciationApr")} />
+        <NumberField label="Selling costs %" value={rent.sellingCostPct ?? 0} onChange={updateRent("sellingCostPct")} />
+        <NumberField label="Alternative investment return %" value={rent.investmentReturnApr ?? 0} onChange={updateRent("investmentReturnApr")} min={-100} />
+        <NumberField label="Ownership cost growth %" value={rent.ownershipCostGrowthApr ?? 0} onChange={updateRent("ownershipCostGrowthApr")} min={-100} />
         <NumberField label="Horizon (years)" value={rent.horizonYears} onChange={updateRent("horizonYears")} step="1" />
       </div>
       <Button type="button" className="mt-4" onClick={() => { setRentResult(calculateRentBuy(rent)); }}>Calculate rent versus buy</Button>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-muted">Mortgage / month</dt><dd data-money className="font-semibold">{formatCurrency(rentResult.monthlyMortgage)}</dd></div><div><dt className="text-muted">Rent cost at horizon</dt><dd data-money className="font-semibold">{formatCurrency(rentResult.rentCostAtHorizon)}</dd></div><div><dt className="text-muted">Buy net cost at horizon</dt><dd data-money className="font-semibold">{formatCurrency(rentResult.buyNetCostAtHorizon)}</dd></div><div><dt className="text-muted">Break-even</dt><dd className="font-semibold">{rentResult.breakEvenMonth ? `${rentResult.breakEvenMonth} months` : "Not reached"}</dd></div></dl>
-      <p className="mt-3 text-xs text-muted">This is a scenario using your assumptions, not a prediction. It excludes taxes on sale and investment opportunity cost.</p>
+      <p className="mt-3 text-xs text-muted">This projection includes sale costs, growth in tax, insurance and maintenance, and the estimated return on an invested down payment. It excludes taxes on sale.</p>
     </Panel>
     <Panel title="Emergency fund" eyebrow="Seeded from essential spend">
       <p className="mb-3 text-sm text-muted">The starting essential-spend assumption is {formatCurrency(essentialMonthlySpend)} from your recent canonical expense history. You can edit every assumption.</p>

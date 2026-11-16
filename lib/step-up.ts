@@ -19,6 +19,7 @@ export async function verifyStepUp(
   user: User,
   code: string,
   factorId?: string,
+  verifyPassword: PasswordVerifier = verifyPasswordRemotely,
 ): Promise<boolean> {
   const { data, error: factorError } = await supabase.auth.mfa.listFactors();
   if (factorError || !Array.isArray(data?.totp)) return false;
@@ -34,19 +35,12 @@ export async function verifyStepUp(
   }
 
   if (!user.email) return false;
-  if (process.env.NODE_ENV === "test") {
-    // In test environment, the mock client provides signInWithPassword directly on auth
-    const auth = supabase.auth as unknown as {
-      signInWithPassword?: (credentials: { email: string; password: string }) => Promise<{ error: unknown }>;
-    };
-    if (typeof auth.signInWithPassword === "function") {
-      const { error } = await auth.signInWithPassword({
-        email: user.email,
-        password: code,
-      });
-      return !error;
-    }
-  }
+  return verifyPassword(user.email, code);
+}
+
+export type PasswordVerifier = (email: string, password: string) => Promise<boolean>;
+
+const verifyPasswordRemotely: PasswordVerifier = async (email, password) => {
   // Use a throwaway client without session persistence so password verification does not mutate the caller's session
   const throwaway = createSupabaseClient(
     publicEnv.supabaseUrl,
@@ -59,11 +53,11 @@ export async function verifyStepUp(
     },
   );
   const { error } = await throwaway.auth.signInWithPassword({
-    email: user.email,
-    password: code,
+    email,
+    password,
   });
   return !error;
-}
+};
 
 /** A selected factor is mandatory; unselected callers accept any enrolled factor. */
 async function verifyTotpFactors(

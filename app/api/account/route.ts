@@ -1,29 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getPlaidClient } from "@/lib/plaid";
+import { removeItemAtPlaid } from "@/lib/plaid-item-removal";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
-import { listActiveItems, decryptItemToken, setItemStatus } from "@/lib/plaid-service";
+import { listItemsForRemoval, setItemStatus } from "@/lib/plaid-service";
 import { createServiceClient } from "@/lib/supabase/service";
 import { writeAudit, getClientIp } from "@/lib/audit";
 import { logError } from "@/lib/log";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { MAX_STEP_UP_ATTEMPTS_PER_HOUR, verifyStepUp } from "@/lib/step-up";
-
-function extractPlaidErrorCode(error: unknown): string | null {
-  if (!error || typeof error !== "object") return null;
-  const resData = (error as { response?: { data?: { error_code?: unknown } } })?.response?.data;
-  if (typeof resData?.error_code === "string") {
-    return resData.error_code;
-  }
-  if ("error_code" in error && typeof (error as { error_code?: unknown }).error_code === "string") {
-    return (error as { error_code: string }).error_code;
-  }
-  const msg = (error as { message?: unknown }).message;
-  if (typeof msg === "string") {
-    if (msg.includes("ITEM_NOT_FOUND")) return "ITEM_NOT_FOUND";
-    if (msg.includes("INVALID_ACCESS_TOKEN")) return "INVALID_ACCESS_TOKEN";
-  }
-  return null;
-}
 
 /**
  * User-controlled account deletion. Removes all Plaid items at Plaid, then
@@ -38,27 +21,22 @@ function extractPlaidErrorCode(error: unknown): string | null {
  * user_id and through both account_id and manual_account_id source records.
  */
 async function removeUserPlaidItems(userId: string): Promise<{ removed: number; failed: number }> {
-  const items = await listActiveItems(userId);
-  const plaid = getPlaidClient();
-  let removed = 0;
-  let failed = 0;
-  for (const item of items) {
-    try {
-      await plaid.itemRemove({ access_token: decryptItemToken(item) });
-      await setItemStatus(userId, item.id, "disconnected").catch(() => {});
-      removed += 1;
-    } catch (error) {
-      const code = extractPlaidErrorCode(error);
-      if (code === "ITEM_NOT_FOUND" || code === "INVALID_ACCESS_TOKEN") {
-        await setItemStatus(userId, item.id, "disconnected").catch(() => {});
-        removed += 1;
-      } else {
-        failed += 1;
+  const items = await listItemsForRemoval(userId);
+  if (items.length === 0) return { removed: 0, failed: 0 };
+  const outcomes = await Promise.all(
+    items.map(async (item) => {
+      try {
+        await removeItemAtPlaid(item);
+        await setItemStatus(userId, item.id, "disconnected");
+        return true;
+      } catch (error) {
         logError("account.delete.itemRemove", error);
+        return false;
       }
-    }
-  }
-  return { removed, failed };
+    }),
+  );
+  const removed = outcomes.filter(Boolean).length;
+  return { removed, failed: outcomes.length - removed };
 }
 
 async function listAllBucketFiles(
@@ -287,8 +265,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     const service = createServiceClient();
-    const storageRemoved = await cleanupUserStorageObjects(service, user.id);
-
     const { removed: itemsRemoved, failed: itemsFailed } = await removeUserPlaidItems(user.id);
     if (itemsFailed > 0) {
       await writeAudit({
@@ -298,7 +274,7 @@ export async function DELETE(request: NextRequest) {
           reason: "plaid_cleanup_failed",
           items_removed: itemsRemoved,
           items_failed: itemsFailed,
-          storage_objects_removed: storageRemoved,
+          storage_objects_removed: 0,
         },
         ip: getClientIp(request),
       });
@@ -307,6 +283,7 @@ export async function DELETE(request: NextRequest) {
         { status: 503 },
       );
     }
+    const storageRemoved = await cleanupUserStorageObjects(service, user.id);
     // Deleting the auth user cascades to all user-owned rows.
     const { error } = await service.auth.admin.deleteUser(user.id);
     if (error) {

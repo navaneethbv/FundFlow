@@ -1,3 +1,5 @@
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: async () => true }));
+import { withWebhookWork } from "../fixtures/webhook-after";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import crypto from "node:crypto";
 
@@ -34,7 +36,8 @@ vi.mock("@/lib/http", () => ({
   },
 }));
 
-import { POST } from "@/app/api/plaid/webhook/route";
+import { POST as routePost } from "@/app/api/plaid/webhook/route";
+const POST = withWebhookWork(routePost);
 import { NextRequest } from "next/server";
 
 describe("POST /api/plaid/webhook", () => {
@@ -199,7 +202,7 @@ describe("POST /api/plaid/webhook", () => {
       }),
     });
     await POST(req);
-    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "error", "ITEM_ERROR");
+    expect(mockSetItemStatus).toHaveBeenCalledWith("user-1", "item-db-1", "active", "ITEM_ERROR");
   });
 
   it("handles HOLDINGS webhook when investmentsPage feature flag is enabled", async () => {

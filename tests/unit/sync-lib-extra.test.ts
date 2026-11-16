@@ -1,3 +1,4 @@
+vi.mock("@/lib/plaid", () => ({ getPlaidClient: () => ({ transactionsSync: vi.fn().mockRejectedValue({ error_code: "ITEM_LOGIN_REQUIRED" }) }) }));
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockListActiveItems = vi.fn();

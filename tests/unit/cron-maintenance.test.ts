@@ -19,7 +19,7 @@ import { GET } from "@/app/api/cron/sync/route";
 const run = () => GET(new NextRequest("http://localhost/api/cron/sync", { headers: { authorization: "Bearer test" } }));
 beforeEach(() => {
   vi.clearAllMocks(); calls.bank.mockResolvedValue(undefined); calls.promote.mockResolvedValue({ promoted: 1, failed: null });
-  service = clientStub({ profiles: { data: [{ id: "manual" }] } });
+  service = clientStub({ list_maintenance_users: { data: [{ user_id: "manual" }] } });
 });
 describe("daily maintenance without bank connections", () => {
   it("promotes scheduled entries before snapshots and forecasts for manual-only users", async () => {
@@ -37,7 +37,7 @@ describe("daily maintenance without bank connections", () => {
     expect(calls.alert).toHaveBeenCalledWith("daily-sync", expect.objectContaining({ firstError: "cron.sync.scheduled-promotion: SCHEDULED_PROMOTION_FAILED" }));
   });
   it("continues maintenance when a user's bank sync fails", async () => {
-    service = clientStub({ profiles: { data: [{ id: "bank" }] }, plaid_items: { data: [{ user_id: "bank" }] } });
+    service = clientStub({ list_maintenance_users: { data: [{ user_id: "bank" }] }, plaid_items: { data: [{ user_id: "bank" }] } });
     calls.bank.mockRejectedValue(new Error("ITEM_LOGIN_REQUIRED"));
     const response = await run(); expect(response.status).toBe(207);
     expect(calls.promote).toHaveBeenCalledWith(service, expect.any(String), "bank"); expect(calls.notify).toHaveBeenCalled();

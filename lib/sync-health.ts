@@ -1,3 +1,4 @@
+import { isPlaidReconnectWarning, requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isLiabilityAccount } from "@/lib/account-balance";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";
@@ -157,6 +158,24 @@ function validTimestamp(value: string | null): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+function productWarning(status: string, itemCode: string | null, jobCode: string | null): ProductSyncState | null {
+  if (status === "disconnected" || requiresPlaidUserAction(itemCode) ||
+      requiresPlaidUserAction(jobCode) || isPlaidReconnectWarning(itemCode)) return "repair_required";
+  const code = jobCode ?? itemCode;
+  if (!code) return null;
+  if (RATE_LIMIT_CODES.has(code)) return "rate_limited";
+  if (PRODUCT_UNAVAILABLE_CODES.has(code)) return "product_unavailable";
+  return null;
+}
+
+function productFreshness(lastSuccessAt: string | null, lastAttemptAt: string | null, failed: boolean, now: number): ProductSyncState {
+  const lastKnownSync = validTimestamp(lastSuccessAt ?? lastAttemptAt);
+  if (failed && lastKnownSync !== null && now - lastKnownSync > 72 * 3_600_000) return "stale";
+  if (!lastSuccessAt) return "never_synced";
+  const lastSuccess = validTimestamp(lastSuccessAt);
+  return lastSuccess !== null && now - lastSuccess <= STALE_AFTER_MS ? "healthy" : "stale";
+}
+
 export function deriveProductSyncHealth(input: Readonly<{
   itemStatus: string;
   itemErrorCode: string | null;
@@ -170,24 +189,8 @@ export function deriveProductSyncHealth(input: Readonly<{
   const lastSuccessAt = input.latestSuccessfulJob?.updated_at ?? null;
   const lastAttemptAt = input.latestJob?.updated_at ?? null;
 
-  let state: ProductSyncState;
-  if (input.itemStatus !== "active") {
-    state = "repair_required";
-  } else if (code && RATE_LIMIT_CODES.has(code)) {
-    state = "rate_limited";
-  } else if (code && PRODUCT_UNAVAILABLE_CODES.has(code)) {
-    state = "product_unavailable";
-  } else if (input.latestJob?.status === "failed" || code) {
-    state = "repair_required";
-  } else if (!lastSuccessAt) {
-    state = "never_synced";
-  } else {
-    const successTimestamp = validTimestamp(lastSuccessAt);
-    state =
-      successTimestamp !== null && input.now.getTime() - successTimestamp <= STALE_AFTER_MS
-        ? "healthy"
-        : "stale";
-  }
+  const state = productWarning(input.itemStatus, itemCode, jobCode)
+    ?? productFreshness(lastSuccessAt, lastAttemptAt, input.latestJob?.status === "failed" || Boolean(code), input.now.getTime());
 
   return { state, lastSuccessAt, lastAttemptAt, safeErrorCode: code };
 }
