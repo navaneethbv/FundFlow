@@ -267,9 +267,13 @@ async function processOneUser(
 ): Promise<boolean> {
   try {
     const userFailures = await syncUser(service, userId, hasBank, deadline);
-    const { error } = await service.from("profiles")
-      .update({ last_maintenance_at: new Date().toISOString() }).eq("id", userId);
-    if (error) userFailures.push(`cron.sync.maintenance-stamp: ${safeSyncError(error)}`);
+    // A user cut short by the deadline keeps its place at the front of the
+    // next run instead of being stamped as maintained.
+    if (!userFailures.includes("DEADLINE_EXCEEDED")) {
+      const { error } = await service.from("profiles")
+        .update({ last_maintenance_at: new Date().toISOString() }).eq("id", userId);
+      if (error) userFailures.push(`cron.sync.maintenance-stamp: ${safeSyncError(error)}`);
+    }
     if (userFailures.length) {
       failures.push(userFailures.join("; "));
       return false;

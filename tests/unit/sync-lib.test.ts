@@ -927,5 +927,38 @@ describe("lib/sync", () => {
         "exact",
       );
     });
+
+    function mockSyncJobs() {
+      const singleJob = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null });
+      const insertJob = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: singleJob }) });
+      const updateJob = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+      mockServiceClient.from.mockImplementation((table: string) => {
+        if (table === "sync_jobs") return { insert: insertJob, update: updateJob };
+        throw new Error(`Unexpected table ${table}`);
+      });
+      return updateJob;
+    }
+
+    it("does not record a failed job when another run holds the item claim", async () => {
+      mockListActiveItems.mockResolvedValue([dummyItem]);
+      const updateJob = mockSyncJobs();
+      mockServiceClient.rpc.mockResolvedValueOnce({ data: false, error: null });
+
+      await syncAllForUser("user-1");
+
+      expect(mockTransactionsSync).not.toHaveBeenCalled();
+      expect(updateJob).toHaveBeenCalledWith({ status: "done", last_error: null });
+    });
+
+    it("records a failed job when the item claim cannot be checked", async () => {
+      mockListActiveItems.mockResolvedValue([dummyItem]);
+      const updateJob = mockSyncJobs();
+      mockServiceClient.rpc.mockResolvedValueOnce({ data: null, error: new Error("Claim error") });
+
+      await syncAllForUser("user-1");
+
+      expect(mockTransactionsSync).not.toHaveBeenCalled();
+      expect(updateJob).toHaveBeenCalledWith({ status: "failed", last_error: "SYNC_CLAIM_UNAVAILABLE" });
+    });
   });
 });

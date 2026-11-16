@@ -998,3 +998,24 @@ it("does not start another user once the cron deadline is reached", async () => 
   expect(await result.json()).toEqual(expect.objectContaining({ synced: 0, skipped: 2 }));
   expect(mockSyncAllForUser).not.toHaveBeenCalled();
 });
+
+it("leaves a user cut short by the deadline at the front of the next run", async () => {
+  mockSafeEqual.mockReturnValue(true);
+  const stamp = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+  const { clientStub } = await import("../fixtures/supabase-query");
+  const db = clientStub({ plaid_items: { data: [{ user_id: "one" }] } });
+  mockServiceClient.from.mockImplementation((table: string) =>
+    table === "profiles" ? { update: stamp } : db.from(table));
+  const started = 1_000_000;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(started);
+  mockSyncAllForUser.mockReset();
+  mockSyncAllForUser.mockImplementation(async () => { clock.mockReturnValue(started + 300_000); });
+  try {
+    const result = await GET(new NextRequest("http://localhost/api/cron/sync", { headers: { authorization: "Bearer test-secret" } }));
+    expect(result.status).toBe(207);
+    expect((await result.json()).failures).toEqual(["DEADLINE_EXCEEDED"]);
+    expect(stamp).not.toHaveBeenCalled();
+  } finally {
+    clock.mockRestore();
+  }
+});

@@ -6,7 +6,7 @@ Remaining live acceptance and feature-flag decisions stay separate from a merged
 
 ## Current review: repository review, 2026-11-15
 
-[[The review](reviews/2026-11-15-repository-review.md) describes the original findings against `37908d5`. The follow-up on PR #239 implements the P1 and P2 code changes and the scoped P3 fixes in the handoff.
+[The review](reviews/2026-11-15-repository-review.md) describes the original findings against `37908d5`. The follow-up on PR #239 implements the P1 and P2 code changes and the scoped P3 fixes in the handoff.
 
 - Apply and verify `20261115130000_cron_delivery_windows.sql` before deploying the code that reads it. Verify deployment state through the linked migration list.
 - Discover and Fidelity report `ITEM_LOGIN_REQUIRED`. The account owner must finish Plaid Link update mode for each existing item. Verify the reconnect clears the item error and that the next sync runs successfully.

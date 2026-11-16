@@ -45,6 +45,8 @@ const STALE_SYNC_SECONDS = 5 * 60;
 const ROUTINE_SYNC_BUDGET_MS = 180_000;
 
 const NOOP_RESULT: SyncResult = { added: 0, modified: 0, removed: 0 };
+/** The claim could not be checked, as distinct from another run holding it. */
+const CLAIM_UNAVAILABLE_RESULT: SyncResult = { added: 0, modified: 0, removed: 0 };
 
 function mapTransactionRow(
   userId: string,
@@ -104,8 +106,14 @@ export async function syncItemTransactions(
       p_stale_seconds: STALE_SYNC_SECONDS,
     },
   );
-  if (claimError) logError("sync.claim", claimError);
-  if (claimError || claimed !== true) return NOOP_RESULT;
+  if (claimError) {
+    // Fail closed: without the claim, overlapping runs could double-spend
+    // Plaid calls or pull a rotated token out from under each other.
+    logError("sync.claim", claimError);
+    return CLAIM_UNAVAILABLE_RESULT;
+  }
+  // Another run owns this item right now; it will persist the cursor.
+  if (claimed !== true) return NOOP_RESULT;
 
   try {
     // Record the attempt on the item row before touching Plaid, so a crashed
@@ -663,7 +671,7 @@ async function syncSingleItem(
     total.added += result.added;
     total.modified += result.modified;
     total.removed += result.removed;
-    if (result === NOOP_RESULT) {
+    if (result === CLAIM_UNAVAILABLE_RESULT) {
       await recordJobEnd(jobId, userId, "failed", "SYNC_CLAIM_UNAVAILABLE");
     } else {
       await recordJobEnd(jobId, userId, "done");

@@ -499,3 +499,43 @@ Per `CLAUDE.md`, apply and verify them in a disposable project and have the owne
 - The 105 route handlers were tabulated for authentication, rate limiting, service-client use, and audit calls, and about 30 were read in full.
   The import, rules, budget, goals, recurring, and investments routes were not read line by line, and neither were the 113 migrations beyond a scan for `security definer` functions without a pinned `search_path` (none found) and grants to `anon`.
 - React components were not reviewed for behaviour or accessibility in this pass.
+
+## Implementation status (2026-11-16, PR #239)
+
+Each finding above was checked against the branch at `0659ce9` by reading the diff, not by exercising live services.
+These statuses describe source on the PR branch, not a deployment.
+The findings above describe `main` at `37908d5` and are kept as written.
+
+| Finding | Status and evidence |
+| --- | --- |
+| P1-1 | Fixed. `lib/plaid-item-health.ts` classifies user-action codes; other failures leave the item `active` with the code recorded, and `listActiveItems({ retryTransient: true })` plus the cron user list retry items previously parked with a transient code. The sync-time `broken_bank` alert uses the `exact` daily key. Sync health reports a failing item as stale after 72 hours. |
+| P1-2 | Fixed. Account deletion uses `listItemsForRemoval` (`active` and `error`). Disconnect now also refuses to delete local rows when Plaid removal fails. |
+| P1-3 | Fixed, pending migration. The digest reads from the last successful delivery (`cron_delivery_windows`), capped at 48 hours, sends once per UTC day, and rethrows so the step is reported. |
+| P1-4 | Fixed. `writeAudit` logs a returned insert error; `lib/push.ts` checks its read and prune. The suggested check of every `AuditAction` against a database constraint was not added. |
+| P2-1 | Fixed. Plaid removal runs before storage cleanup. |
+| P2-2 | Fixed. `kid` format, signature length, `iat`, and body hash are checked before any key fetch; unknown keys are negatively cached for five minutes and fetches share a fail-closed per-IP limiter. |
+| P2-3 | Fixed, pending migration. `PENDING_DISCONNECT` is handled like `PENDING_EXPIRATION`; `NEW_ACCOUNTS_AVAILABLE` sets `plaid_items.new_accounts_available` and update mode enables account selection. Unhandled codes are logged once. |
+| P2-4 | Fixed. The client sets a timeout and one retry; `ask` and `receipt` return 503 on provider failure and refund the daily counter. |
+| P2-5 | Fixed. Thinking is no longer requested for the three calls, `max_tokens` stops are handled, parsed output is validated, and token usage is logged. |
+| P2-6 | Fixed. Dates use `isValidDateKey`, the quota is charged after upload validation, and extracted fields are bounded. |
+| P2-7 | Fixed, pending migration. The alert window advances only after a successful send, with web push as a fallback. `instrumentation.ts` logs route and error class; no external error sink was added. |
+| P2-8 | Fixed, pending migration. Users are ordered by `profiles.last_maintenance_at`, empty profiles are skipped, and two users run concurrently. Open signup remains an owner decision. |
+| P2-9 | Fixed. Rule automation and alerts after a committed page are best-effort. |
+| P2-10 | Fixed. A claim error returns without syncing. Routine sync has a 180-second budget and resumes from the repair cursor. |
+| P2-11 | Fixed. The route has a 20-per-day limiter, `ai_insights` is pruned after 180 days, and generation is audited. Rows are still appended rather than replaced. |
+| P3 | Done: 500-row sync pages, one account-map load per run, `after()` on the sync webhook, weekly low-cash key, daily calendar-feed audit, token revoke 404, `TRUSTED_IP_HEADER`, session-export limiter, cached `/api/health` with scheduler freshness, zero-balance debt minimum, rent-versus-buy inputs, shared `isValidDateKey`, viewer-day in the demo and manual-holding routes, injected step-up verifier, `/auth/` prefix match, `global-error.tsx`, `docs/FEATURE_FLAGS.md`, CI SHA pins, `.nvmrc` and `engines`, `SMTP_FROM` required in production, and the `/api/v1/aggregates` rename with a `truncated` field. |
+| P3, not done | `requireUser()` in `lib/http.ts` still skips the revocation check when a token has no `session_id`; only the page path in `lib/session-revocation.ts` fails closed. The aggregates route's default period still uses the UTC day. The flag-age unit test, the `isolate: false` trial, and the `minimatch` override were not attempted. |
+
+### Follow-up fixes made during this check
+
+- A sync skipped because another run held the item claim was recorded as a failed job with `SYNC_CLAIM_UNAVAILABLE`.
+  Only a claim that could not be checked is now recorded that way; ordinary contention is recorded as done, as before.
+- A user whose maintenance was cut short by the cron deadline was still stamped `last_maintenance_at`, which moved them to the back of the next run.
+  The stamp is now skipped for that user.
+- `lib/audit.ts` imported `node:net` above `import "server-only"`; the guard is first again.
+
+### Behaviour changes to be aware of
+
+- Disconnecting a bank now returns 503 and keeps local data when Plaid removal fails for a reason other than a missing item or invalid token.
+  An item whose stored token cannot be decrypted can therefore not be disconnected from the app until that is handled separately.
+- `20261115130000_cron_delivery_windows.sql` must be applied before this code is deployed: the digest, cron alerts, `/api/health`, the maintenance user list, the AI quota refund, and the new-accounts flag all read objects it creates.
