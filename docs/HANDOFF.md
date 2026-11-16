@@ -5,6 +5,14 @@ PRs #225 and #226 merged on October 13, 2026; their pre-merge branch description
 Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
 A recorded deployment or local test result does not verify a later production build.
 
+## 2026-11-16: Review follow-up check and migration
+
+Each finding in [the review](reviews/2026-11-15-repository-review.md#implementation-status-2026-11-16-pr-239) was checked against PR #239; three small defects were fixed (claim contention recorded as a failed job, deadline-cut users stamped as maintained, import order in `lib/audit.ts`) and a render race in the manual-assets browser spec was removed.
+Typecheck, lint, and the unit suite (6,471 tests) passed locally, and all hosted checks passed on `0ecc6ce`.
+`20261115130000_cron_delivery_windows.sql` was applied to the production Supabase project in one transaction and verified by query: the journal table has RLS on with no client grants, the three functions are executable by the service role only, and both new columns exist.
+The remote migration history now ends at `20261115130000` and does not contain `20261025090000`.
+No live bank, email, or AI-provider flow was exercised.
+
 ## 2026-11-15: Repository review follow-up
 
 The remediation adds recoverable Plaid sync failures, update-mode prompts for reconnect and new accounts, provider cleanup ahead of storage deletion, durable digest and cron-alert delivery windows, fair maintenance ordering, checked audit writes, and AI timeout, quota and retention controls. It also pins CI and updates local tooling, moves the read-only aggregates endpoint to `/api/v1/aggregates`, fixes the rent-versus-buy and zero-balance debt calculations, and reviews the dark flag backlog.

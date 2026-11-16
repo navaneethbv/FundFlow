@@ -8,7 +8,7 @@ Remaining live acceptance and feature-flag decisions stay separate from a merged
 
 [The review](reviews/2026-11-15-repository-review.md) describes the original findings against `37908d5`. The follow-up on PR #239 implements the P1 and P2 code changes and the scoped P3 fixes in the handoff.
 
-- Apply and verify `20261115130000_cron_delivery_windows.sql` before deploying the code that reads it. Verify deployment state through the linked migration list.
+- `20261115130000_cron_delivery_windows.sql` was applied to the production project on 2026-11-16 and recorded in the migration history; its table, columns, functions, and service-only grants were verified by query. `20261025090000_transaction_datetime.sql` remains unapplied, so the remote history skips that version and `transactionTimes` must stay off.
 - Discover and Fidelity report `ITEM_LOGIN_REQUIRED`. The account owner must finish Plaid Link update mode for each existing item. Verify the reconnect clears the item error and that the next sync runs successfully.
 - [Feature flag rollout review](FEATURE_FLAGS.md) records the acceptance criteria and retirement candidate. Review and staging acceptance are pending.
 - The owner-deferred signup decision, production transaction-time migration, and other items carried over from earlier reviews remain tracked in the review’s “Still open from earlier reviews” table.
