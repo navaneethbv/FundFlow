@@ -8,8 +8,8 @@ export interface SegmentedControlItem {
 }
 
 /**
- * Link-based pill group in a recessed track, the active segment lifted onto
- * a `--panel` pill with a soft shadow — Monarch's Totals/Percent, Month/
+ * Link-based pill group with no track: the active segment is a filled
+ * `--panel-2` pill, the rest are bare muted labels — Monarch's Totals/Percent, Month/
  * Year/Decade, List/Calendar, Breakdown/Trends control. Replaces the three
  * divergent chip recipes this app had (MonthChips' solid-fill active state,
  * the account-filter chip's soft-fill active state, and ScopeChips'
@@ -23,7 +23,7 @@ export default function SegmentedControl({
 }: Readonly<{ items: SegmentedControlItem[]; ariaLabel: string }>) {
   return (
     <fieldset
-      className="inline-flex items-center gap-0.5 rounded-full bg-panel-2 p-1"
+      className="inline-flex items-center gap-1"
     >
       <legend className="sr-only">{ariaLabel}</legend>
       {items.map((item) => (
@@ -37,9 +37,9 @@ export default function SegmentedControl({
             // padding brought the *group* to 44px, but each individual segment
             // — the actual tap target — stayed 36px on all six surfaces that
             // use this control.
-            "inline-flex min-h-11 items-center justify-center rounded-full px-3.5 text-sm font-semibold transition-all duration-150 active:scale-[0.98] focus-visible:outline-2",
+            "inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-medium transition-all duration-150 active:scale-[0.98] focus-visible:outline-2 pointer-fine:min-h-9",
             item.active
-              ? "bg-panel text-foreground shadow-sm"
+              ? "bg-panel-2 text-foreground"
               : "text-muted hover:text-foreground",
           )}
         >

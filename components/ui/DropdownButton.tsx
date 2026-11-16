@@ -48,7 +48,7 @@ export default function DropdownButton({
         onClick={toggle}
         aria-expanded={open}
         aria-haspopup="true"
-        className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border border-panel-border bg-panel px-3.5 text-sm font-semibold text-foreground shadow-sm transition-all duration-150 hover:border-accent/40 active:scale-[0.98] focus-visible:outline-2"
+        className="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-field border border-panel-border bg-panel px-3 text-sm font-medium text-foreground shadow-sm transition-all duration-150 hover:bg-panel-2 active:scale-[0.98] focus-visible:outline-2 pointer-fine:min-h-9"
       >
         {label}
         <ChevronDown

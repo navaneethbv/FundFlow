@@ -108,6 +108,10 @@ for (const width of [375, 1440]) for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Save budget", exact: true }).click();
     await expect.poll(() => submitted.length).toBe(3);
     expect(submitted[2]?.body).toMatchObject({ month: "2026-10", items: [{ monthly_limit: 1000 }, { monthly_limit: 900 }, { monthly_limit: 200 }] });
+    // The button fades back from its 50% loading state over 150ms once the
+    // save resolves. Let it settle, or the contrast check measures a frame of
+    // that fade rather than the resting control.
+    await expect(page.getByRole("button", { name: "Save budget", exact: true })).toHaveCSS("opacity", "1");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`budgets-${width}-${theme}.png`), fullPage: true });

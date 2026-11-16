@@ -43,18 +43,15 @@ function NavLink({
       aria-label={badge && badge > 0 ? `${item.label}, ${badge} to review` : undefined}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "inline-flex items-center gap-3 rounded-field text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
+        "mb-0.5 inline-flex items-center gap-3 rounded-field text-base font-normal transition-colors duration-150 focus-visible:outline-2",
         compact
           ? "min-h-11 shrink-0 px-3 py-2"
-          : "w-full px-3 py-2 md:justify-center md:px-0 lg:justify-start lg:px-3 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
+          : "h-9 w-full px-3 md:justify-center md:px-0 lg:justify-start lg:px-3 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0",
         isActive
-          ? cn(
-              "bg-accent-soft text-accent",
-              // Brand-coloured edge marker on the expanded rail.
-              !compact &&
-                "relative lg:before:absolute lg:before:inset-y-2 lg:before:left-0 lg:before:w-[3px] lg:before:rounded-full lg:before:bg-accent-strong group-data-[collapsed=true]/sidebar:before:hidden",
-            )
-          : "text-muted hover:bg-panel-hover hover:text-foreground",
+          ? // Neutral fill, no brand colour: the active page is marked by
+            // surface tone alone.
+            "bg-panel-2 text-foreground"
+          : "text-foreground/90 hover:bg-panel-hover hover:text-foreground",
       )}
     >
       <Icon aria-hidden className="h-4 w-4 shrink-0" />
@@ -181,19 +178,19 @@ export default async function AppSidebar({
           />
         }
       >
-        <nav aria-label="Primary" className="space-y-0.5">
+        <nav aria-label="Primary">
           {primaryItems.map((item) => (
             <NavLink key={item.key} item={item} active={active} />
           ))}
-          <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
-            Planning
-          </p>
+          {/* One flat list. The group names stay for assistive tech; a 12px
+              gap is the only visible seam. */}
+          <p className="sr-only">Planning</p>
+          <div aria-hidden className="h-3" />
           {planningItems.map((item) => (
             <NavLink key={item.key} item={item} active={active} badge={badgeFor(item)} />
           ))}
-          <p className="hidden px-3 pb-1 pt-4 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted lg:block group-data-[collapsed=true]/sidebar:hidden">
-            Manage
-          </p>
+          <p className="sr-only">Manage</p>
+          <div aria-hidden className="h-3" />
           {manageItems.map((item) => (
             <NavLink key={item.key} item={item} active={active} />
           ))}

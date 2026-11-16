@@ -27,6 +27,7 @@ export {
   LogOut,
   Menu,
   Moon,
+  PanelLeft,
   PiggyBank,
   Plus,
   RefreshCw,

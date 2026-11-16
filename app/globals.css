@@ -29,7 +29,7 @@
   --danger-foreground: #ffffff;
   --warning: #b54708;
   --warning-foreground: #ffffff;
-  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-soft: 0 2px 4px rgba(0, 0, 0, 0.05);
   --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-glow: 0 4px 14px rgba(255, 107, 46, 0.35);
   --logo-backing: #ffffff;
@@ -100,7 +100,7 @@
   --danger-foreground: #ffffff;
   --warning: #b54708;
   --warning-foreground: #ffffff;
-  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-soft: 0 2px 4px rgba(0, 0, 0, 0.05);
   --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-glow: 0 4px 14px rgba(255, 107, 46, 0.35);
   --viz-1: #2a78d6;
@@ -162,7 +162,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --radius-card: 0.75rem;
-  --radius-field: 0.625rem;
+  --radius-field: 0.5rem;
   --shadow-card: var(--shadow-soft);
   --shadow-float: var(--shadow-lift);
   --shadow-pop: var(--shadow-glow);
@@ -179,7 +179,7 @@
   --panel-2: #2a2a28;
   --panel-border: rgba(255, 255, 255, 0.08);
   --panel-hover: rgba(255, 255, 255, 0.06);
-  --muted: #a5a39d;
+  --muted: #9b9994;
   --accent: #ff8a54;
   --accent-strong: #ff6b2e;
   --accent-foreground: #191918;
@@ -195,7 +195,7 @@
   --danger-foreground: #191918;
   --warning: #fdb022;
   --warning-foreground: #191918;
-  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-soft: 0 2px 4px rgba(0, 0, 0, 0.2);
   --shadow-lift: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 4px 16px rgba(255, 107, 46, 0.45);
   --logo-backing: #ffffff;
@@ -249,7 +249,7 @@
     --panel-2: #2a2a28;
     --panel-border: rgba(255, 255, 255, 0.08);
     --panel-hover: rgba(255, 255, 255, 0.06);
-    --muted: #a5a39d;
+    --muted: #9b9994;
     --accent: #ff8a54;
     --accent-strong: #ff6b2e;
     --accent-foreground: #191918;
@@ -265,7 +265,7 @@
     --danger-foreground: #191918;
     --warning: #fdb022;
     --warning-foreground: #191918;
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-soft: 0 2px 4px rgba(0, 0, 0, 0.2);
     --shadow-lift: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4);
     --shadow-glow: 0 4px 16px rgba(255, 107, 46, 0.45);
     /* Keep in sync with the approved [data-theme=dark] set above. */
@@ -330,15 +330,9 @@ body {
 }
 
 body {
-  /* A soft glow of the palette's accent at the top of every page, so each
-     palette reads as a whole mood rather than a recoloured button. Mixed from
-     tokens, so all twenty palettes get it for free; `fixed` keeps it still
-     behind scrolling content. */
-  background:
-    radial-gradient(1100px 520px at 100% -180px, color-mix(in srgb, var(--accent-strong) 14%, transparent), transparent 70%),
-    radial-gradient(760px 440px at -10% -120px, color-mix(in srgb, var(--accent-strong) 7%, transparent), transparent 70%),
-    var(--background);
-  background-attachment: fixed;
+  /* Flat page colour. Cards separate from it by tone and a soft shadow, not
+     by a glow or a border (docs/MONARCH_LOOK.md, "Surfaces"). */
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans, Arial), Helvetica, sans-serif;
   min-height: 100vh;
@@ -350,40 +344,40 @@ body {
   font-size: 93.75%;
 }
 
-/* Brand gradient fill for primary actions and the logo mark. */
+/* Flat brand fill for primary actions. The gradient is kept for the logo
+   mark only, which reads `--accent-gradient` directly. */
 .bg-brand {
   background-color: var(--accent-strong);
-  background-image: var(--accent-gradient);
 }
 
 /* Type roles: quiet uppercase section labels and headline numerals. */
 .eyebrow {
-  font-size: 0.6875rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.02em;
   color: var(--muted);
 }
 
 .display {
-  font-weight: 750;
-  letter-spacing: -0.03em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
 /* Slim page-header title (replaces the eyebrow + .display pattern as pages
    migrate to PageHeader) and a card's own title, one step down in size. */
 .page-title {
-  font-size: 1.5rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.5rem;
 }
 
 .card-title {
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.6875rem;
 }
 
 .metric-value {
@@ -391,7 +385,7 @@ body {
      sets a number in mono, and the class name stays so the privacy-blur
      selector and its pinning test don't need to change. */
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
@@ -592,11 +586,11 @@ a {
 
 /* Dashboard layout presets adjust card density without clipping widget data. */
 [data-dashboard-widget-size="compact"] > section {
-  padding: 1rem;
+  --panel-pad: 1rem;
 }
 
 [data-dashboard-widget-size="expanded"] > section {
-  padding: 1.5rem;
+  --panel-pad: 1.5rem;
 }
 
 /* The saved "Reduce" preference, for people whose OS setting is off. */

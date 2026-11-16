@@ -10,9 +10,9 @@ export default function SearchButton() {
       onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))}
       aria-label="Search (Cmd+K)"
       title="Search (Cmd+K)"
-      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel-2 text-muted shadow-sm transition-colors duration-150 hover:border-accent/50 hover:text-foreground focus-visible:outline-2"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors duration-150 hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
     >
-      <Search aria-hidden className="h-[1.15rem] w-[1.15rem]" />
+      <Search aria-hidden className="h-4 w-4" />
     </button>
   );
 }

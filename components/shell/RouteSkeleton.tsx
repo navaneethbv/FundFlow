@@ -21,7 +21,7 @@ export default function RouteSkeleton({
 }>) {
   return (
     <AppShell active={active} skeleton>
-      <div className="space-y-4" aria-busy="true" aria-label={`Loading ${label}`}>
+      <div className="space-y-4 pt-4" aria-busy="true" aria-label={`Loading ${label}`}>
         {children ?? (
           <>
             <div className="h-10 w-48 animate-pulse rounded-field bg-panel-hover" />
