@@ -1,5 +1,5 @@
 import "server-only";
-import type { Holding, InvestmentTransaction, Security } from "plaid";
+import type { Holding, InvestmentTransaction, Security } from "plaid/legacy";
 import { getPlaidClient } from "@/lib/plaid";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decryptItemTokenAndUpgrade, listActiveItems } from "@/lib/plaid-service";

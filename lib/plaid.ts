@@ -1,5 +1,5 @@
 import "server-only";
-import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import { Configuration, PlaidApi, PlaidEnvironments } from "plaid/legacy";
 import { serverEnv } from "@/lib/env.server";
 
 /**

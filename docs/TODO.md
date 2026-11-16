@@ -12,7 +12,7 @@ Remaining live acceptance and feature-flag decisions stay separate from a merged
 - Discover and Fidelity report `ITEM_LOGIN_REQUIRED`. The account owner must finish Plaid Link update mode for each existing item. Verify the reconnect clears the item error and that the next sync runs successfully.
 - [Feature flag rollout review](FEATURE_FLAGS.md) records the acceptance criteria and retirement candidate. Review and staging acceptance are pending.
 - The owner-deferred signup decision, production transaction-time migration, and other items carried over from earlier reviews remain tracked in the review’s “Still open from earlier reviews” table.
-- Plaid 51 and web-push 4 require independent compatibility work. The tooling constraints for ESLint 10 and TypeScript 7 remain in Dependabot configuration.
+- Plaid 51 is adopted through its `plaid/legacy` entry point, so the old client API is unchanged; migrating to the new SDK is deferred. web-push 4 is adopted with named imports. `@types/node` stays on 22 to match the runtime. The tooling constraints for ESLint 10 and TypeScript 7 remain in Dependabot configuration.
 
 ## Bill search and transaction times, 2026-10-25
 

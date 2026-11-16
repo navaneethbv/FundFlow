@@ -4,7 +4,7 @@ import {
   CountryCode,
   PlaidApi,
   PlaidEnvironments,
-} from "plaid";
+} from "plaid/legacy";
 import { fetchInstitutionBranding } from "../lib/plaid-institution.ts";
 
 function required(name: string): string {

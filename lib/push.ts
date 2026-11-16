@@ -1,5 +1,5 @@
 import "server-only";
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 import { createServiceClient } from "@/lib/supabase/service";
 import { logError } from "@/lib/log";
 
@@ -47,7 +47,7 @@ export async function sendPushToUser(
 ): Promise<void> {
   try {
     if (!isPushConfigured()) return;
-    webpush.setVapidDetails(
+    setVapidDetails(
       process.env.VAPID_SUBJECT ?? "mailto:admin@fundflow.local",
       process.env.VAPID_PUBLIC_KEY!,
       process.env.VAPID_PRIVATE_KEY!,
@@ -64,7 +64,7 @@ export async function sendPushToUser(
     await Promise.all(
       (subscriptions ?? []).map(async (subscription) => {
         try {
-          await webpush.sendNotification(
+          await sendNotification(
             {
               endpoint: subscription.endpoint as string,
               keys: {

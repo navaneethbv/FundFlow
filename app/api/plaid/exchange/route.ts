@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { CountryCode } from "plaid";
+import { CountryCode } from "plaid/legacy";
 import { getPlaidClient } from "@/lib/plaid";
 import { serverEnv } from "@/lib/env.server";
 import { requireUser, errorResponse, badRequest } from "@/lib/http";
