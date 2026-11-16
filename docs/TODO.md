@@ -8,18 +8,18 @@ Remaining live acceptance and feature-flag decisions stay separate from a merged
 
 [The review](reviews/2026-11-15-repository-review.md) describes the original findings against `37908d5`. The follow-up on PR #239 implements the P1 and P2 code changes and the scoped P3 fixes in the handoff.
 
-- `20261115130000_cron_delivery_windows.sql` was applied to the production project on 2026-11-16 and recorded in the migration history; its table, columns, functions, and service-only grants were verified by query. `20261025090000_transaction_datetime.sql` remains unapplied, so the remote history skips that version and `transactionTimes` must stay off.
+- `20261115130000_cron_delivery_windows.sql` was applied to the production project on 2026-11-16 and recorded in the migration history; its table, columns, functions, and service-only grants were verified by query. The `transaction_datetime` migration (`20261025090000_transaction_datetime.sql`) was applied the same day; `transactions.datetime` and `authorized_datetime` exist as `timestamptz`. The remote history records it under the apply timestamp rather than `20261025090000`, so `supabase migration list --linked` will show a version mismatch for that one file. The change is idempotent (`add column if not exists`), so re-running it is harmless. `transactionTimes` can now be enabled.
 - Discover and Fidelity report `ITEM_LOGIN_REQUIRED`. The account owner must finish Plaid Link update mode for each existing item. Verify the reconnect clears the item error and that the next sync runs successfully.
 - [Feature flag rollout review](FEATURE_FLAGS.md) records the acceptance criteria and retirement candidate. Review and staging acceptance are pending.
-- The owner-deferred signup decision, production transaction-time migration, and other items carried over from earlier reviews remain tracked in the review’s “Still open from earlier reviews” table.
+- The owner-deferred signup decision and other items carried over from earlier reviews remain tracked in the review’s “Still open from earlier reviews” table.
 - Plaid 51 and web-push 4 require independent compatibility work. The tooling constraints for ESLint 10 and TypeScript 7 remain in Dependabot configuration.
 
 ## Bill search and transaction times, 2026-10-25
 
 `/transactions/search` (linked as "Find a bill" from the ledger header) finds a transaction by provider name or exact amount and shows date, time, provider, total, and the card or account that paid it.
 It reads existing columns and needs no rollout step.
-The time of day needs `20261025090000_transaction_datetime.sql`, which is unapplied to production.
-Apply it first, then set `FUNDFLOW_FEATURE_FLAGS=transactionTimes`: with the flag on, sync writes `datetime`/`authorized_datetime`, so enabling it before the migration fails every sync.
+The time of day needs `20261025090000_transaction_datetime.sql`, which was applied to production on 2026-11-16.
+The remaining step is to set `FUNDFLOW_FEATURE_FLAGS=transactionTimes`, which makes sync write `datetime`/`authorized_datetime`.
 Existing rows stay without a time until Plaid resends them; only institutions that report a time ever fill it.
 
 ## Merged budget, goal, and debt planning, 2026-10-13
