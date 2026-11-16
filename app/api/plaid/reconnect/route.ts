@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { CountryCode } from "plaid";
+import { CountryCode } from "plaid/legacy";
 import { errorResponse } from "@/lib/http";
 import { setItemStatus, setNewAccountsAvailable, updateItemBranding, decryptItemToken } from "@/lib/plaid-service";
 import { requireOwnedItem } from "@/lib/plaid-item-route";

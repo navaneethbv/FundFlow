@@ -56,10 +56,8 @@ vi.mock("@/lib/log", () => ({ logError: (...a: unknown[]) => mockLogError(...a) 
 const mockSetVapidDetails = vi.fn();
 const mockSendNotification = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("web-push", () => ({
-  default: {
-    setVapidDetails: (...a: unknown[]) => mockSetVapidDetails(...a),
-    sendNotification: (...a: unknown[]) => mockSendNotification(...a),
-  },
+  setVapidDetails: (...a: unknown[]) => mockSetVapidDetails(...a),
+  sendNotification: (...a: unknown[]) => mockSendNotification(...a),
 }));
 
 import { POST as askPost } from "@/app/api/ai/ask/route";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getPlaidClient } from "@/lib/plaid";
-import { PlaidApi } from "plaid";
+import { PlaidApi } from "plaid/legacy";
 
 describe("getPlaidClient", () => {
   it("initializes and returns a PlaidApi client instance", () => {

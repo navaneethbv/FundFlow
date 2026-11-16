@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+
+const webPushMock = vi.hoisted(() => ({
+  setVapidDetails: vi.fn(),
+  sendNotification: vi.fn(),
+}));
+vi.mock("web-push", () => webPushMock);
 import { getWeeklyReportData } from "@/lib/weekly-report-data";
 import { isAllowedPushEndpoint, isPushConfigured, sendPushToUser } from "@/lib/push";
 import { isAskAiAvailable } from "@/lib/ai-gate";
@@ -122,9 +128,8 @@ describe("Push Notification Extra Branches", () => {
       process.env.VAPID_PRIVATE_KEY = "test-priv";
       expect(isPushConfigured()).toBe(true);
 
-      const webpush = await import("web-push");
-      vi.spyOn(webpush.default, "setVapidDetails").mockImplementation(() => {});
-      vi.spyOn(webpush.default, "sendNotification")
+      webPushMock.setVapidDetails.mockImplementation(() => {});
+      webPushMock.sendNotification
         .mockRejectedValueOnce({ statusCode: 410 })
         .mockRejectedValueOnce({ statusCode: 500 });
 

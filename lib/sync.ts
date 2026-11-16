@@ -1,7 +1,7 @@
 import "server-only";
 import { processRuleAutomation } from "@/lib/compound-rule-service";
 import { brokenBankDetails, brokenBankSubjectKey, isPlaidReconnectWarning, requiresPlaidUserAction } from "@/lib/plaid-item-health";
-import type { Transaction, RemovedTransaction, AccountBase } from "plaid";
+import type { Transaction, RemovedTransaction, AccountBase } from "plaid/legacy";
 import { getPlaidClient } from "@/lib/plaid";
 import { createServiceClient } from "@/lib/supabase/service";
 import {

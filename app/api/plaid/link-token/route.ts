@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { CountryCode, Products } from "plaid";
-import type { LinkTokenCreateRequest } from "plaid";
+import { CountryCode, Products } from "plaid/legacy";
+import type { LinkTokenCreateRequest } from "plaid/legacy";
 import { getPlaidClient } from "@/lib/plaid";
 import { serverEnv } from "@/lib/env.server";
 import { requireUser, errorResponse } from "@/lib/http";

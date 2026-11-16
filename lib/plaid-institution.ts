@@ -1,4 +1,4 @@
-import type { CountryCode, PlaidApi } from "plaid";
+import type { CountryCode, PlaidApi } from "plaid/legacy";
 
 export interface InstitutionBranding {
   institutionId: string;

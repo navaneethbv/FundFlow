@@ -64,7 +64,7 @@ import {
   TOKEN_ROTATION_DAYS,
 } from "@/lib/plaid-service";
 import type { PlaidItemRow } from "@/lib/types";
-import type { AccountBase } from "plaid";
+import type { AccountBase } from "plaid/legacy";
 
 describe("lib/plaid-service", () => {
   beforeEach(() => {

@@ -1,7 +1,7 @@
 import "server-only";
 import { requiresPlaidUserAction } from "@/lib/plaid-item-health";
 import { createHash } from "node:crypto";
-import type { AccountBase } from "plaid";
+import type { AccountBase } from "plaid/legacy";
 import { createServiceClient } from "@/lib/supabase/service";
 import { encryptSecret, decryptSecret, decryptSecretDetailed } from "@/lib/crypto";
 import { normalizeExternalDisplayText } from "@/lib/external-display-text";

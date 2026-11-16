@@ -1,5 +1,5 @@
 import "server-only";
-import type { TransactionStream } from "plaid";
+import type { TransactionStream } from "plaid/legacy";
 import { getPlaidClient } from "@/lib/plaid";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decryptItemToken, listActiveItems } from "@/lib/plaid-service";

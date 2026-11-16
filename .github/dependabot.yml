@@ -28,13 +28,18 @@ updates:
       # once eslint-plugin-react ships ESLint 10 support.
       - dependency-name: "eslint"
         versions: ["10.x"]
+      # @types/node must track the runtime in .nvmrc and package.json engines
+      # (Node 22). Typings for a newer Node describe APIs the deployment lacks.
+      # Raise this together with the runtime.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   # Exact pins in package.json (no caret) are deliberate, not drift:
   # - react / react-dom 19 must move as a pair with next 16's peer range;
   #   bump them together or not at all.
   # - sharp 0.35 ships prebuilt binaries for this toolchain; a minor bump
   #   re-downloads the toolchain and has broken node-link in the past.
-  # Deferred majors (evaluate each in its own PR with lint + typecheck +
-  # unit suites as the gate): plaid 51 and web-push 4.
+  # plaid 51 is on the legacy entry point ("plaid/legacy"); moving to its new
+  # SDK is a separate migration. web-push 4 is ESM-only with named exports.
   - package-ecosystem: "github-actions"
     directory: "/"
     patterns: ["*"]
