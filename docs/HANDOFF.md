@@ -5,6 +5,15 @@ PRs #225 and #226 merged on October 13, 2026; their pre-merge branch description
 Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
 A recorded deployment or local test result does not verify a later production build.
 
+## 2026-11-16: Monarch look and feel, first pass (unmerged)
+
+Branch `ui/monarch-look-and-feel` adds [a measured visual reference](MONARCH_LOOK.md) and restyles the shared chrome to it: tokens and type roles, the sidebar, the page top bar, edge-to-edge content, and the card, button, tab, segmented, dropdown, and input primitives.
+Page-level work is listed under "Not yet matched" in that document.
+Typecheck, lint, palette validation, and the unit suite (579 files, 6,471 tests) passed locally.
+The signed-in app was **not** viewed after the change: the local build needs a sign-in that was not available, so only the login page was seen rendered.
+No production build, Playwright run, or visual-baseline update was done, and nothing is committed or pushed.
+`npx npm-check-updates` found one minor update (`@anthropic-ai/sdk` 1.9) and three majors (`@types/node` 26, `eslint` 10, `typescript` 7); none were applied, to keep this change to styling.
+
 ## 2026-11-16: Review follow-up check and migration
 
 Each finding in [the review](reviews/2026-11-15-repository-review.md#implementation-status-2026-11-16-pr-239) was checked against PR #239; three small defects were fixed (claim contention recorded as a failed job, deadline-cut users stamped as maintained, import order in `lib/audit.ts`) and a render race in the manual-assets browser spec was removed.

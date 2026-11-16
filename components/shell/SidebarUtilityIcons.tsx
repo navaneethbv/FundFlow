@@ -18,7 +18,7 @@ export default function SidebarUtilityIcons() {
   return (
     <nav
       aria-label="Shell utilities"
-      className="hidden items-center gap-1 lg:flex group-data-[collapsed=true]/sidebar:hidden"
+      className="hidden items-center lg:flex group-data-[collapsed=true]/sidebar:hidden"
     >
       <SearchButton />
       <NotificationsBell />
@@ -26,9 +26,9 @@ export default function SidebarUtilityIcons() {
         href="/settings"
         aria-label="Settings"
         title="Settings"
-        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-panel-border bg-panel-2 text-muted shadow-sm transition-colors duration-150 hover:border-accent/50 hover:text-foreground focus-visible:outline-2"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors duration-150 hover:bg-panel-hover hover:text-foreground focus-visible:outline-2"
       >
-        <Settings aria-hidden className="h-[1.15rem] w-[1.15rem]" />
+        <Settings aria-hidden className="h-4 w-4" />
       </Link>
     </nav>
   );

@@ -42,9 +42,9 @@ export default function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className="w-full min-w-0 px-4 py-5 sm:px-6 lg:px-7 lg:py-7"
+          className="w-full min-w-0 px-4 pb-4"
         >
-          <div className="mx-auto max-w-[1320px] space-y-5">{children}</div>
+          <div className="space-y-4">{children}</div>
         </main>
       </div>
     </div>

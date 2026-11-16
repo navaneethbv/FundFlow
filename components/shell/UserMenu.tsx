@@ -47,9 +47,9 @@ export default function UserMenu({
         onClick={toggle}
         aria-expanded={open}
         aria-label={`Account menu for ${displayName}`}
-        className="flex w-full items-center gap-2 rounded-field p-2 text-left transition-colors duration-150 hover:bg-panel-hover focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:p-0"
+        className="flex w-full items-center gap-2 rounded-field p-2 text-left text-muted hover:text-foreground transition-colors duration-150 hover:bg-panel-hover focus-visible:outline-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:p-0"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-soft text-sm font-bold text-accent">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-soft text-xs font-semibold text-accent">
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, same pattern as ProfileSection.
             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -57,7 +57,7 @@ export default function UserMenu({
             initial
           )}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold md:sr-only lg:not-sr-only group-data-[collapsed=true]/sidebar:sr-only">
+        <span className="min-w-0 flex-1 truncate text-base font-normal md:sr-only lg:not-sr-only group-data-[collapsed=true]/sidebar:sr-only">
           {displayName}
         </span>
         <ChevronDown
