@@ -129,7 +129,7 @@ export default function BudgetSetupWizard({
   if (proposals.length === 0) return null;
   const copy = STEP_COPY[step];
   return (
-    <Panel tone="accent" eyebrow={`Set up your budget · Step ${stepIndex + 1} of ${SETUP_STEPS.length}`}>
+    <Panel eyebrow={`Set up your budget · Step ${stepIndex + 1} of ${SETUP_STEPS.length}`}>
       <ol className="mb-4 flex flex-wrap gap-2 text-xs" aria-label="Budget setup steps">
         {SETUP_STEPS.map((name, index) => (
           <li key={name} aria-current={index === stepIndex ? "step" : undefined}
