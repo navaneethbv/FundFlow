@@ -36,7 +36,7 @@ describe("workflow parity boundaries", () => {
       extraParams: { scope: "household", itemId: "institution", category: "FOOD" },
     }));
     const options = [...html.matchAll(/<option[^>]*value="([^"]*)"/g)].map(match => match[1]);
-    expect(options.length).toBe(3);
+    expect(options).toHaveLength(3);
     for (const option of options) {
       expect(option).toContain("scope=household");
       expect(option).toContain("itemId=institution");
