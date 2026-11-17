@@ -10,13 +10,11 @@
  * Usage: node scripts/audit-gate.mjs
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import allowlistFile from "./audit-allowlist.json" with { type: "json" };
 
 const BLOCKING = new Set(["high", "critical"]);
 
-const allowlist = JSON.parse(
-  readFileSync(new URL("./audit-allowlist.json", import.meta.url), "utf8"),
-).advisories;
+const allowlist = allowlistFile.advisories;
 
 const today = new Date().toISOString().slice(0, 10); // explicit UTC boundary
 const expired = allowlist.filter((entry) => entry.reviewBy < today);
