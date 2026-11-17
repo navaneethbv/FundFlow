@@ -46,15 +46,16 @@ describe("RecentActivity", () => {
   });
 
   it("converts the Plaid-signed amount to RegisterRow's display sign convention", () => {
-    // amount: 64.18 (Plaid: money out) must render as an outflow, "-$64.18".
+    // amount: 64.18 (Plaid: money out) must render as an unsigned, neutral outflow.
     const html = renderToStaticMarkup(
       createElement(RecentActivity, {
         transactions: [transaction({ amount: 64.18 })],
         accountNames: new Map(),
       }),
     );
-    expect(html).toContain("-$64.18");
-    expect(html).toContain("var(--viz-neg)");
+    expect(html).toContain("$64.18");
+    expect(html).not.toContain("-$64.18");
+    expect(html).not.toContain("var(--viz-neg)");
   });
 
   it("renders a Plaid negative amount (money in) as an inflow", () => {

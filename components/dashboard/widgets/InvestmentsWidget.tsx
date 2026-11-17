@@ -1,5 +1,5 @@
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
-import DropdownButton from "@/components/ui/DropdownButton";
+import ButtonLink from "@/components/ui/ButtonLink";
 import { formatCurrency } from "@/lib/format";
 import type { DashboardInvestmentSummary } from "@/lib/dashboard-widgets-data";
 
@@ -23,10 +23,7 @@ export default function InvestmentsWidget({
           : null
       }
       action={
-        <DropdownButton
-          label="Holdings"
-          items={[{ label: "Open Investments", href: "/investments" }]}
-        />
+        <ButtonLink href="/investments" variant="ghost" size="sm">View holdings</ButtonLink>
       }
     >
       <p data-money className="metric-value text-2xl sm:text-3xl">

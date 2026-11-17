@@ -9,6 +9,18 @@ the complete module inventory.
 working. This file is the reference behind those rules.
 Read the relevant section here before changing a subsystem it covers.
 
+## Dashboard and transaction presentation
+
+Dashboard account/month selectors use server-authored URLs and preserve the
+existing household, institution and drill filters. Card view selections are local
+component state; they do not mutate profile preferences. Secondary dashboard and
+ledger workflows remain reachable through native disclosures.
+
+`DetailPane` uses the shared dialog focus/scroll-lock hooks and a portal for its
+right-side modal, including annotation-only editors. Feature-gated API capabilities
+remain gated independently. `LedgerSummary` labels its paginated scope explicitly;
+it does not turn visible rows into full-period or mixed-currency financial totals.
+
 ## Budget, savings, and debt scenarios
 
 `lib/budget-explorer.ts` filters/sorts visible monthly rows without changing section or full-budget totals. `BudgetExplorer` integrates with the existing monthly tables and previews transfers between distinct editable expense envelopes without writes. Pace requires complete, fresh, known-currency data for the viewer's current month; the page passes `resolveViewerToday` explicitly.

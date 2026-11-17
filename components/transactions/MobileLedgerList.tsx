@@ -50,7 +50,7 @@ function amountColor(amount: number): { color: string } | undefined {
 
 function signedAmount(amount: number, currency: string): string {
   if (roundsToZero(amount)) return formatCurrency(0, currency);
-  return `${amount < 0 ? "+" : "-"}${formatCurrency(Math.abs(amount), currency)}`;
+  return `${amount < 0 ? "+" : ""}${formatCurrency(Math.abs(amount), currency)}`;
 }
 
 function DayHeader({
@@ -60,7 +60,7 @@ function DayHeader({
   return (
     <li
       data-ledger-day-header={group.date}
-      className="flex items-center justify-between gap-3 bg-panel/60 px-4 py-1.5 text-xs font-semibold text-muted"
+      className="flex items-center justify-between gap-3 bg-panel-2 px-4 py-1.5 text-xs font-medium text-muted"
     >
       <span className="tabular-nums">{formatDate(group.date)}</span>
       {group.showNet && (
@@ -223,7 +223,7 @@ function LedgerCardAmount({ row, undoEnabled }: Pick<LedgerCardProps, "row" | "u
     <div className="flex shrink-0 flex-col items-end gap-1">
       <span
         data-money
-        className="whitespace-nowrap font-semibold tabular-nums"
+        className="whitespace-nowrap font-medium tabular-nums"
         style={amountColor(row.amount)}
       >
         {signedAmount(row.amount, row.currency)}

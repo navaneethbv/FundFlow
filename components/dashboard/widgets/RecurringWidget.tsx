@@ -2,9 +2,8 @@ import { MerchantAvatar } from "@/components/ui/Avatar";
 import { merchantLogoDataUri } from "@/lib/merchant-logos";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import ButtonLink from "@/components/ui/ButtonLink";
-import DropdownButton from "@/components/ui/DropdownButton";
 import { Repeat } from "@/components/ui/icons";
-import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
+import WidgetChoice from "@/components/dashboard/widgets/WidgetChoice";
 import { formatCurrency } from "@/lib/format";
 import { daysUntil, formatDueAnnotation, localDateKey } from "@/lib/format-date";
 
@@ -82,21 +81,27 @@ export default function RecurringWidget({
   currency: string;
   error?: string | null;
 }>) {
-  const upcoming = withinNextSevenDays(items, today);
   const overdue = overdueRecurringItems(items, today);
-  const displayItems = [...overdue, ...upcoming.filter((u) => !overdue.some((o) => o.name === u.name && o.nextDate === u.nextDate))];
+  const options = [
+    { value: "7", label: "Next 7 days" },
+    { value: "overdue", label: "Overdue" },
+  ].map(option => {
+    const upcoming = withinNextSevenDays(items, today);
+    // Identity, not merchant names: separate subscriptions can share a name/date.
+    const displayItems = option.value === "overdue" ? overdue : [...overdue, ...upcoming.filter(item => !overdue.includes(item))];
+    return { value: option.value, label: option.label, content: <>
+      <p className="mb-3 text-xs text-muted">{option.value === "overdue" ? "Unpaid past-due occurrences." : "Next 7 days, including overdue items."}</p>
+      <RecurringRows displayItems={displayItems} today={today} currency={currency} overdueOnly={option.value === "overdue"} />
+      <ButtonLink href="/recurring" variant="ghost" size="sm">Manage recurring</ButtonLink>
+    </> };
+  });
+  return <WidgetChoice title="Recurring" label="Recurring window" error={error} options={options} />;
+}
 
-  return (
-    <WidgetShell
-      title="Recurring"
-      error={error}
-      action={
-        <DropdownButton
-          label="Next 7 days"
-          items={[{ label: "Manage recurring", href: "/recurring" }]}
-        />
-      }
-    >
+function RecurringRows({ displayItems, today, currency, overdueOnly }: Readonly<{
+  displayItems: UpcomingRecurringItem[]; today: string; currency: string; overdueOnly: boolean;
+}>) {
+  return <>
       {displayItems.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <span
@@ -105,8 +110,8 @@ export default function RecurringWidget({
           >
             <Repeat className="h-5 w-5" />
           </span>
-          <p className="text-sm font-semibold">Stay on top of your bills</p>
-          <p className="text-xs text-muted">Nothing due in the next seven days.</p>
+          <p className="text-sm font-medium">Stay on top of your bills</p>
+          <p className="text-xs text-muted">{overdueOnly ? "No overdue items." : "Nothing due in the next seven days."}</p>
           <ButtonLink href="/recurring" variant="primary" size="sm">
             Manage recurring
           </ButtonLink>
@@ -123,12 +128,12 @@ export default function RecurringWidget({
             return (
               <li
                 key={item.id ?? `${item.name}-${item.nextDate}`}
-                className="flex items-center gap-3 text-sm"
+                className="flex flex-wrap items-center gap-3 border-b border-panel-border py-3 text-base last:border-0"
               >
                 <MerchantAvatar
                   name={item.name}
                   logoUrl={merchantLogoDataUri(item.name)}
-                  size={32}
+                  size={40}
                   className="shrink-0"
                 />
                 <span className="min-w-0 flex-1 truncate font-medium">
@@ -145,6 +150,5 @@ export default function RecurringWidget({
           })}
         </ul>
       )}
-    </WidgetShell>
-  );
+    </>;
 }

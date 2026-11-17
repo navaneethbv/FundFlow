@@ -1,5 +1,6 @@
 "use client";
 
+import Disclosure from "@/components/ui/Disclosure";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import BudgetExplorer from "@/components/budget/BudgetExplorer";
@@ -371,7 +372,7 @@ export default function BudgetPlanner({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
           <div className="flex flex-wrap justify-end gap-2">
             <CopyLastMonthButton month={month} />
@@ -402,7 +403,9 @@ export default function BudgetPlanner({
             </Panel>
           )}
 
+          <Disclosure title={`Explore budget · ${visibleSections.reduce((total, section) => total + section.lines.length, 0)} categories shown`}>
           <BudgetExplorer data={monthlyData} options={explorerOptions} onChange={setExplorerOptions} visibleCount={visibleSections.reduce((total, section) => total + section.lines.length, 0)} currency={currency} today={viewerToday} complete={dataComplete} />
+          </Disclosure>
 
           <div className="space-y-3">
             <SuperBand label="Income" />

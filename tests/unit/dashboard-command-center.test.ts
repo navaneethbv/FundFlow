@@ -140,7 +140,7 @@ describe("dashboard command center", () => {
     expect(toolbar).toContain("RefreshButton");
     expect(toolbar).toContain("Monthly review");
     expect(toolbar).toContain("dashboardHref");
-    expect(toolbar).toContain('aria-label="Account filter"');
+    expect(toolbar).toContain('label="Account filter"');
     expect(months).toContain("activeView");
     expect(months).toContain("dashboardHref");
   });

@@ -25,7 +25,7 @@ type OpenPanel = "date" | "filters" | null;
 type FilterChip = { key: keyof LedgerFilters; label: string; removeLabel: string };
 
 const triggerClasses =
-  "inline-flex min-h-11 items-center gap-2 rounded-full border border-panel-border bg-panel px-4 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2";
+  "inline-flex min-h-11 pointer-fine:min-h-9 items-center gap-2 rounded-field border border-panel-border bg-panel px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2";
 
 function filterCount(filters: LedgerFilters): number {
   return [
@@ -137,11 +137,11 @@ function ReviewViews({ current, count, pending, navigate }: Readonly<{
   const summary = count === 0 ? "You're all caught up across all accounts." : `${count?.toLocaleString()} transaction${suffix} need review across all dates and accounts.`;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-panel-border pb-3">
-      <nav aria-label="Transaction review views" className="inline-flex rounded-full border border-panel-border bg-panel-2 p-1 text-xs font-semibold shadow-sm">
+      <nav aria-label="Transaction review views" className="inline-flex rounded-field border border-panel-border bg-panel-2 p-1 text-xs font-medium shadow-sm">
         {views.map((view) => (
           <button key={view.value} type="button" id={`review-view-${view.id}`} aria-current={current === view.value ? "page" : undefined}
             disabled={pending} onClick={() => navigate({ review: view.value === "all" ? null : view.value }, `view-${view.id}`)}
-            className={`rounded-full px-3 py-1.5 transition-colors ${current === view.value ? "bg-panel text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
+            className={`rounded-field px-3 py-1.5 transition-colors ${current === view.value ? "bg-panel text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
             {view.label}
           </button>
         ))}
@@ -322,15 +322,15 @@ export default function TransactionQueryControls({
           </button>
           {open === "date" && (
             <dialog open ref={datePanelRef} aria-label="Date filter" className="fixed inset-x-4 top-[15vh] z-40 m-0 max-h-[70vh] overflow-y-auto w-auto space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72">
-              <label className="block text-xs font-semibold text-muted">
+              <label className="block text-xs font-medium text-muted">
                 Month
                 <Input aria-label="Month" type="month" value={monthDraft} onChange={(event) => { setMonthDraft(event.target.value); setRangeDraft({ start: "", end: "" }); }} className="mt-1" />
               </label>
               <p className="text-xs text-muted">Choose a month or an inclusive date range.</p>
-              <label className="block text-xs font-semibold text-muted">Start date
+              <label className="block text-xs font-medium text-muted">Start date
                 <Input aria-label="Start date" type="date" value={rangeDraft.start} onChange={event => { setMonthDraft(""); setRangeDraft(value => ({ ...value, start: event.target.value })); }} className="mt-1" />
               </label>
-              <label className="block text-xs font-semibold text-muted">End date
+              <label className="block text-xs font-medium text-muted">End date
                 <Input aria-label="End date" type="date" value={rangeDraft.end} onChange={event => { setMonthDraft(""); setRangeDraft(value => ({ ...value, end: event.target.value })); }} className="mt-1" />
               </label>
               {dateError && <p role="alert" className="text-sm text-danger">{dateError}</p>}
@@ -370,22 +370,22 @@ export default function TransactionQueryControls({
             <dialog open ref={filtersPanelRef} aria-label="Transaction filters" className="fixed inset-x-4 top-[15vh] z-40 m-0 max-h-[70vh] w-auto space-y-4 overflow-y-auto rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96">
               <div className="grid gap-3 sm:grid-cols-2">
                 <LedgerMetadataControls draft={filterDraft} update={patch => setFilterDraft(value => ({ ...value, ...patch }))} parityEnabled={parityEnabled} detailsEnabled={detailsEnabled} />
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Account
                   <Select aria-label="Account" value={filterDraft.accountId} onChange={(event) => setFilterDraft((value) => ({ ...value, accountId: event.target.value }))} className="mt-1">
                     <option value="">All accounts</option>
                     {options.accounts.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Minimum amount
                   <Input aria-label="Minimum amount" type="number" min="0" step="0.01" inputMode="decimal" value={filterDraft.minAmount ?? ""} onChange={(event) => setFilterDraft((value) => ({ ...value, minAmount: event.target.value }))} className="mt-1" />
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Maximum amount
                   <Input aria-label="Maximum amount" type="number" min="0" step="0.01" inputMode="decimal" value={filterDraft.maxAmount ?? ""} onChange={(event) => setFilterDraft((value) => ({ ...value, maxAmount: event.target.value }))} className="mt-1" />
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Posting status
                   <Select aria-label="Posting status" value={filterDraft.status ?? ""} onChange={(event) => setFilterDraft((value) => ({ ...value, status: event.target.value as LedgerFilters["status"] }))} className="mt-1">
                     <option value="">Pending and posted</option>
@@ -393,28 +393,28 @@ export default function TransactionQueryControls({
                     <option value="posted">Posted</option>
                   </Select>
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Category
                   <Select aria-label="Category" value={filterDraft.category} onChange={(event) => setFilterDraft((value) => ({ ...value, category: event.target.value, sub: "" }))} className="mt-1">
                     <option value="">All categories</option>
                     {options.categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Subcategory
                   <Select aria-label="Subcategory" disabled={!filterDraft.category} value={filterDraft.sub} onChange={(event) => setFilterDraft((value) => ({ ...value, sub: event.target.value }))} className="mt-1">
                     <option value="">All subcategories</option>
                     {categorySubcategories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Merchant
                   <Input aria-label="Merchant" list="transaction-merchant-options" value={filterDraft.merchant} onChange={(event) => setFilterDraft((value) => ({ ...value, merchant: event.target.value }))} className="mt-1" placeholder="Any merchant" />
                   <datalist id="transaction-merchant-options">
                     {options.merchants.map((option) => <option key={option} value={option} />)}
                   </datalist>
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Money direction
                   <Select aria-label="Money direction" value={filterDraft.flow} onChange={(event) => setFilterDraft((value) => ({ ...value, flow: event.target.value as LedgerFilters["flow"] }))} className="mt-1">
                     <option value="">Money in and out</option>
@@ -422,7 +422,7 @@ export default function TransactionQueryControls({
                     <option value="out">Money out</option>
                   </Select>
                 </label>
-                <label className="text-xs font-semibold text-muted">
+                <label className="text-xs font-medium text-muted">
                   Account type
                   <Select aria-label="Account type" value={filterDraft.accountType} onChange={(event) => setFilterDraft((value) => ({ ...value, accountType: event.target.value as LedgerFilters["accountType"] }))} className="mt-1">
                     <option value="">All account types</option>
@@ -451,7 +451,7 @@ export default function TransactionQueryControls({
               aria-label={chip.removeLabel}
               disabled={isPending}
               onClick={() => removeChip(chip.key)}
-              className="inline-flex min-h-11 max-w-full items-center gap-1.5 break-words rounded-full border border-panel-border bg-panel-2 px-3 text-xs font-semibold text-foreground hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50"
+              className="inline-flex min-h-11 max-w-full items-center gap-1.5 break-words rounded-field border border-panel-border bg-panel-2 px-3 text-xs font-medium text-foreground hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50"
             >
               <span className="min-w-0 break-all">{chip.label}</span>
               <X aria-hidden className="h-3.5 w-3.5" />

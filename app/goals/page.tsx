@@ -1,3 +1,5 @@
+import Disclosure from "@/components/ui/Disclosure";
+import ButtonLink from "@/components/ui/ButtonLink";
 import AppShell from "@/components/shell/AppShell";
 import PageHeader from "@/components/shell/PageHeader";
 import GoalScenarioPlanner from "@/components/goals/GoalScenarioPlanner";
@@ -147,7 +149,8 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
       )}
 
       {tab === "pay_down" && (
-        <Panel eyebrow="Available" title="Liability accounts without a goal">
+        <Panel title="Liability accounts without a goal">
+          <ButtonLink href="/debt" variant="ghost" size="sm">Explore debt payoff strategies</ButtonLink>
           {unlinkedLiabilities.length === 0 ? (
             <p className="text-sm text-muted">
               None of your liability accounts are included.
@@ -185,7 +188,7 @@ export default async function GoalsPage({ searchParams }: Readonly<PageProps>) {
         />
       )}
       {(!goalsV2Enabled || tab === "save_up") && (
-        <GoalScenarioPlanner today={today} goals={scenarioGoals} />
+        <Disclosure title="Explore savings scenarios"><GoalScenarioPlanner today={today} goals={scenarioGoals} /></Disclosure>
       )}
     </AppShell>
   );

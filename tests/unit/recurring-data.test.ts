@@ -517,7 +517,7 @@ describe("loadRecurringData", () => {
     expect(result.view.occurrences[0]?.frequency).toBe("Recurring");
   });
 
-  it("chunks stream and transaction lookups into 500-id batches in household scope", async () => {
+  it("keeps stream and transaction lookup URLs within the request-line budget", async () => {
     const rows = Array.from({ length: 1000 }, (_, i) => ({
       id: `stream-${i}`,
       user_id: "user-1",
@@ -561,6 +561,17 @@ describe("loadRecurringData", () => {
       rawScope: "household-1",
     });
     expect(result.allStreams).toHaveLength(1000);
+    for (const table of ["recurring_stream_transactions", "transactions"]) {
+      const batches = client.callsOn(table).filter(call => call.method === "in")
+        .map(call => call.args[1] as string[]);
+      expect(batches.length).toBeGreaterThan(1);
+      expect(new Set(batches.flat()).size).toBe(1000);
+      for (const batch of batches) {
+        const uuids = batch.map(() => "00000000-0000-4000-8000-000000000000");
+        const params = new URLSearchParams({ select: "id,date,amount,account_id,user_id", id: `in.(${uuids.join(",")})` });
+        expect(`/rest/v1/${table}?${params}`.length).toBeLessThan(8 * 1024 - 512);
+      }
+    }
   });
 
   it("tolerates null join rows when resolving stream transactions", async () => {

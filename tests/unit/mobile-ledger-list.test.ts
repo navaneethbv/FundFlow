@@ -44,7 +44,7 @@ describe("MobileLedgerList", () => {
   it("renders merchant, formatted amount, category, and account", () => {
     const html = render([baseRow]);
     expect(html).toContain("Blue Bottle");
-    expect(html).toContain("-$6.50");
+    expect(html).toContain("$6.50");
     expect(html).toContain("Food and Drink");
     expect(html).toContain("Checking ••1234");
   });
@@ -75,7 +75,7 @@ describe("MobileLedgerList", () => {
   });
 
   it.each([
-    ["0.005 stays positive", 0.005, "-$0.01"],
+    ["0.005 stays positive", 0.005, "$0.01"],
     ["-0.005 stays negative", -0.005, "+$0.01"],
   ] as const)("%s", (_name, amount, expected) => {
     // Plaid convention: positive = money out (`-` prefix), negative = in (`+`).
@@ -145,12 +145,12 @@ describe("MobileLedgerList", () => {
     });
 
     it("prints the net for a multi-row day", () => {
-      expect(render(twoDays, true)).toContain("-$26.50 net");
+      expect(render(twoDays, true)).toContain("$26.50 net");
     });
 
     it("withholds the net for a single-row day", () => {
       // 2026-07-14 holds one row; a net there would restate it.
-      expect(render(twoDays, true)).not.toContain("-$9.00 net");
+      expect(render(twoDays, true)).not.toContain("$9.00 net");
     });
 
     it("restarts zebra striping inside each day group", () => {

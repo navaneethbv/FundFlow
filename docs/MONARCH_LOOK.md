@@ -14,6 +14,8 @@ What this document does not do:
   FundFlow keeps its own mark, uses Geist, and uses lucide icons.
 - It does not override FundFlow's own rules. Where the reference conflicts with an accessibility gate or a chart rule, the gate wins and the gap is listed under "Deliberate differences".
 
+Current implementation and workflow acceptance are tracked in [MONARCH_PARITY.md](MONARCH_PARITY.md). The mapping and gaps below describe the first pass; they are not a claim that the follow-up is complete.
+
 ## 1. Design character
 
 Monarch reads as calm and dense at the same time.

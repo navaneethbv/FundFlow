@@ -37,7 +37,7 @@ export default function TableToolbar({
 
   function triggerClass(panel: Panel) {
     return cn(
-      "inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold transition-colors duration-150 focus-visible:outline-2",
+      "inline-flex min-h-11 pointer-fine:min-h-9 items-center gap-1.5 whitespace-nowrap rounded-field border px-3.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-2",
       open === panel
         ? "border-accent/40 bg-accent-soft text-accent"
         : "border-panel-border bg-panel text-foreground shadow-sm hover:border-accent/40",

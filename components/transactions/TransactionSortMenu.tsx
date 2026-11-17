@@ -92,7 +92,7 @@ export default function TransactionSortMenu({
         onClick={toggle}
         disabled={isPending}
         className={cn(
-          "relative inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border border-panel-border bg-panel px-3.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50",
+          "relative inline-flex min-h-11 pointer-fine:min-h-9 items-center gap-1.5 whitespace-nowrap rounded-field border border-panel-border bg-panel px-3.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-accent/40 focus-visible:outline-2 disabled:opacity-50",
           open && "z-40",
         )}
       >
@@ -101,13 +101,13 @@ export default function TransactionSortMenu({
       </button>
       {open && (
         <dialog open ref={panelRef} aria-label="Sort transactions" className="absolute left-auto right-0 top-auto z-40 m-0 mt-2 w-72 space-y-4 rounded-card border border-panel-border bg-panel p-4 text-foreground shadow-float">
-          <label className="block text-xs font-semibold text-muted">
+          <label className="block text-xs font-medium text-muted">
             Sort by
             <Select aria-label="Sort by" value={draftField} onChange={(event) => setDraftField(event.target.value as LedgerSortField)} className="mt-1">
               {Object.entries(FIELD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </Select>
           </label>
-          <label className="block text-xs font-semibold text-muted">
+          <label className="block text-xs font-medium text-muted">
             Direction
             <Select aria-label="Direction" value={draftDirection} onChange={(event) => setDraftDirection(event.target.value as LedgerSortDirection)} className="mt-1">
               <option value="asc">{directionLabel(draftField, "asc")}</option>

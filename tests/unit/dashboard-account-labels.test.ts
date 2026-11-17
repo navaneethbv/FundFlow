@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push() {}, refresh() {} }) }));
+
 // Client-only buttons in the toolbar need the app router; this test is about
 // the account chips' text, not those.
 vi.mock("@/components/ConnectBankButton", () => ({

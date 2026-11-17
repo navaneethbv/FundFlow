@@ -1,3 +1,5 @@
+import Disclosure from "@/components/ui/Disclosure";
+import LedgerSummary from "@/components/transactions/LedgerSummary";
 import {
   LEDGER_PAGE_SIZE as PAGE_SIZE, buildAccountLookups, loadLedgerRows, loadLedgerRowDetails,
   type LedgerChunkFilters,
@@ -456,9 +458,11 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           }
         />
 
+        <Disclosure title="Review transfers, refunds, and duplicates">
         <RefundReview />
         <TransferReview />
         <DuplicateReview />
+        </Disclosure>
 
         {projectedLedgerEnabled && <ProjectedLedgerSection items={projectedItems} />}
 
@@ -496,7 +500,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
 
         {transactionReviewEnabled && (
           <>
-            <h2 id="transaction-review-heading" tabIndex={-1} className="text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Transaction review</h2>
+            <h2 id="transaction-review-heading" tabIndex={-1} className="text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Transaction review</h2>
             <TransactionReviewFeedback />
           </>
         )}
@@ -505,7 +509,7 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
           <p className="text-xs text-muted">
             {total.toLocaleString()} transaction{total === 1 ? "" : "s"}
             {describeLedgerPeriod(effectiveMonth, state.year, day, Boolean(bounds), state.start ? bounds : null)}
-            . Negative amounts represent expenses; positive amounts represent income.
+            . Money out is unsigned; money in has a plus sign. Transfers are included.
           </p>
         )}
 
@@ -535,7 +539,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
         )}
         {showLedgerRows && state.view !== "calendar" && (
 
-            <Panel padding="none" className="overflow-hidden">
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <Panel padding="none" className="min-w-0 overflow-hidden">
               {transactionReviewEnabled && (
                 <TransactionReviewBulkStrip
                   eligibleRows={rows
@@ -568,9 +573,9 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                 />
               </div>
               <div className="hidden overflow-x-auto sm:block">
-                <table className="w-full text-sm">
+                <table className="w-full text-base">
                   <thead className="sticky top-0 z-10 bg-panel-2">
-                    <tr className="border-b border-panel-border text-left text-xs uppercase tracking-wider text-muted tabular-nums">
+                    <tr className="border-b border-panel-border text-left text-sm text-muted tabular-nums">
                       {transactionReviewEnabled && (
                         <th className="w-10 px-3 py-3 text-center">
                           <span className="sr-only">Select</span>
@@ -579,16 +584,16 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
                       {isFeatureEnabled("bulkEdit") && (
                         <th className="w-10 px-3 py-3 text-center"><span className="sr-only">Select</span></th>
                       )}
-                      <th className="px-4 py-3 font-semibold">Date</th>
-                      <th className="px-4 py-3 font-semibold">Merchant</th>
+                      <th className="px-4 py-3 font-medium">Date</th>
+                      <th className="px-4 py-3 font-medium">Merchant</th>
                       {visibleColumns.has("category") && (
-                        <th className="hidden px-4 py-3 font-semibold sm:table-cell">Category</th>
+                        <th className="hidden px-4 py-3 font-medium sm:table-cell">Category</th>
                       )}
                       {visibleColumns.has("account") && (
-                        <th className="hidden px-4 py-3 font-semibold md:table-cell">Account</th>
+                        <th className="hidden px-4 py-3 font-medium md:table-cell">Account</th>
                       )}
-                      <th className="px-4 py-3 text-right font-semibold">Amount</th>
-                      <th className="px-4 py-3 text-right font-semibold">
+                      <th className="px-4 py-3 text-right font-medium">Amount</th>
+                      <th className="px-4 py-3 text-right font-medium">
                         <span className="sr-only">Notes and splits</span>
                       </th>
                     </tr>
@@ -630,6 +635,8 @@ export default async function TransactionsPage({ searchParams }: Readonly<PagePr
               </div>
               </LedgerKeyboardNavigation>
             </Panel>
+            <LedgerSummary rows={rows} total={total} page={page} />
+            </div>
 
         )}
 

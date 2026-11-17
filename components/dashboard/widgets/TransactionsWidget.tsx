@@ -1,7 +1,6 @@
 import type { ComponentProps } from "react";
 import RecentActivity from "@/components/dashboard/RecentActivity";
-import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
-import DropdownButton from "@/components/ui/DropdownButton";
+import WidgetChoice from "@/components/dashboard/widgets/WidgetChoice";
 
 export default function TransactionsWidget({
   transactions,
@@ -14,19 +13,9 @@ export default function TransactionsWidget({
   viewerId?: string;
   error?: string | null;
 }>) {
-  return (
-    <WidgetShell
-      title="Transactions"
-      error={error}
-      action={
-        <DropdownButton
-          label="All transactions"
-          items={[{ label: "Open the ledger", href: "/transactions" }]}
-        />
-      }
-    >
-      {/* RecentActivity carries its own empty state, so no `empty` here. */}
-      <RecentActivity transactions={transactions} accountNames={accountNames} viewerId={viewerId} />
-    </WidgetShell>
-  );
+  return <WidgetChoice title="Transactions" label="Recent transaction direction" error={error} options={[
+    { value: "all", label: "All transactions", content: <RecentActivity transactions={transactions} accountNames={accountNames} viewerId={viewerId} /> },
+    { value: "in", label: "Money in", content: <RecentActivity transactions={transactions.filter(row => row.amount < 0)} accountNames={accountNames} viewerId={viewerId} /> },
+    { value: "out", label: "Money out", content: <RecentActivity transactions={transactions.filter(row => row.amount > 0)} accountNames={accountNames} viewerId={viewerId} /> },
+  ]} />;
 }

@@ -26,7 +26,7 @@ import type { DashboardInvestmentSummary } from "@/lib/dashboard-widgets-data";
  *
  * Every widget is a thin server component over data the page already loaded,
  * so the grid adds no queries of its own beyond the cumulative-spend window.
- * Widgets render in Monarch's fixed asymmetric two-column split (left:
+ * Widgets render in Monarch's equal two-column split (left:
  * Budget/Net worth/Goals; right: Spending/Transactions/Recurring/
  * Investments — see `WidgetDefinition.column`); the user's saved `order`
  * still controls arrangement within whichever column a widget belongs to.
@@ -124,7 +124,7 @@ export default function DashboardWidgetGrid({
   const right = keys.filter((key) => WIDGET_DEFINITIONS[key].column === "right");
 
   const column = (side: WidgetKey[], name: string) => (
-    <div data-dashboard-column={name} className="min-w-0 space-y-5">
+    <div data-dashboard-column={name} className="min-w-0 space-y-4">
       {side.map((key) => (
         // min-w-0: a grid item defaults to min-width:auto, so a widget with a
         // wide child (table, chart, long merchant name) stretches its track
@@ -142,7 +142,7 @@ export default function DashboardWidgetGrid({
   );
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[6fr_5fr] lg:items-start">
+    <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
       {column(left, "left")}
       {column(right, "right")}
     </div>

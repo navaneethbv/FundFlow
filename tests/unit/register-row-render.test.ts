@@ -24,10 +24,11 @@ describe("RegisterRow", () => {
     expect(html).toContain("$64.18");
   });
 
-  it("renders an outflow with a minus sign and the negative diverging token", () => {
+  it("renders an outflow unsigned with neutral text", () => {
     const html = renderRow();
-    expect(html).toContain("-$64.18");
-    expect(html).toContain("var(--viz-neg)");
+    expect(html).toContain("$64.18");
+    expect(html).not.toContain("-$64.18");
+    expect(html).not.toContain("var(--viz-neg)");
   });
 
   it("renders an inflow with a plus sign and the positive diverging token", () => {

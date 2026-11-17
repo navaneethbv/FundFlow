@@ -1,6 +1,6 @@
 import CumulativeCompareChart from "@/components/charts/CumulativeCompareChart";
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
-import DropdownButton from "@/components/ui/DropdownButton";
+import ButtonLink from "@/components/ui/ButtonLink";
 import { formatCurrency } from "@/lib/format";
 import type { CumulativeSpendDay } from "@/lib/dashboard";
 
@@ -29,10 +29,7 @@ export default function SpendingCompareWidget({
       error={error}
       empty={hasSpend ? null : "No spending recorded in either month yet."}
       action={
-        <DropdownButton
-          label="This month vs. last month"
-          items={[{ label: "Open Cash Flow", href: "/cash-flow" }]}
-        />
+        <ButtonLink href="/cash-flow" variant="ghost" size="sm">View cash flow</ButtonLink>
       }
     >
       <CumulativeCompareChart

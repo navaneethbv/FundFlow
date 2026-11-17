@@ -73,10 +73,10 @@ describe("Frontend Multiverse: Filter & Navigation ARIA Contracts", () => {
     expect(source).toContain('aria-current={active ? "true" : undefined}');
   });
 
-  it("DashboardToolbar sets aria-current on active account link", () => {
+  it("DashboardToolbar exposes a labeled selector with the committed value", () => {
     const source = readFileSync("components/dashboard/DashboardToolbar.tsx", "utf8");
-    expect(source).toContain('aria-current={selectedAccountId ? undefined : "true"}');
-    expect(source).toContain('aria-current={active ? "true" : undefined}');
+    expect(source).toContain('label="Account filter"');
+    expect(source).toContain('value={href(selectedAccountId, selectedMonth)}');
   });
 
   it("BudgetTable has focus-visible styling on unbudgeted toggle button", () => {

@@ -15,7 +15,7 @@ import type { LedgerDayGroup } from "@/lib/ledger-data";
 function ledgerNetPrefix(net: number): string {
   if (roundsToZero(net)) return "";
   if (net < 0) return "+";
-  if (net > 0) return "-";
+  if (net > 0) return "";
   return "";
 }
 
@@ -77,15 +77,15 @@ function BulkSelectCell({ id, merchant, reviewVersion }: Readonly<{ id: string; 
  */
 function DayHeaderRow({ date, columnCount, dayGroup }: Readonly<{ date: string; columnCount: number; dayGroup: LedgerTableRowProps["dayGroup"] }>) {
   return (
-    <tr className="border-b border-panel-border bg-panel/60">
+    <tr className="border-b border-panel-border bg-panel-2">
       <th
         scope="row"
         colSpan={columnCount - 2}
-        className="px-4 py-1.5 text-left tabular-nums text-xs font-semibold text-muted"
+        className="px-4 py-1.5 text-left tabular-nums text-sm font-medium text-muted"
       >
         {formatDate(date)}
       </th>
-      <td className="px-4 py-1.5 text-right text-xs font-normal text-muted">
+      <td className="px-4 py-1.5 text-right text-sm font-normal text-muted">
         {dayGroup?.showNet && (
           <span
             data-money
@@ -123,13 +123,13 @@ function MerchantCell({
         <MerchantAvatar
           name={row.merchant || "?"}
           logoUrl={merchantLogoDataUri(row.merchant || "?")}
-          size={28}
+          size={20}
           className="mt-0.5"
         />
         <span className="min-w-0">
           <span className="font-medium">{merchant}</span>
           {row.pending && (
-            <Badge tone="warning" className="ml-2">
+            <Badge tone="neutral" className="ml-2">
               pending
             </Badge>
           )}
@@ -202,7 +202,7 @@ export default function LedgerTableRow({
   const currency = row.iso_currency_code ?? "USD";
   const isMoneyIn = row.amount < 0 && !roundsToZero(row.amount);
   const showsAmount = !roundsToZero(row.amount);
-  const amountSign = isMoneyIn ? "+" : "-";
+  const amountSign = isMoneyIn ? "+" : "";
   const amountDisplay = showsAmount
     ? `${amountSign}${formatCurrency(Math.abs(row.amount), currency)}`
     : formatCurrency(0, currency);
@@ -261,7 +261,7 @@ export default function LedgerTableRow({
         )}
         <td
           data-money
-          className="whitespace-nowrap px-4 py-3 text-right align-top font-semibold"
+          className="whitespace-nowrap px-4 py-3 text-right align-top font-normal"
           style={isMoneyIn ? { color: "var(--viz-pos)" } : undefined}
         >
           {amountDisplay}
