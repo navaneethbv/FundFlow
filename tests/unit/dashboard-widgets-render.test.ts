@@ -158,7 +158,7 @@ describe("NetWorthWidget", () => {
       }),
     );
     expect(html).toContain("Up");
-    expect(html).toContain("in the last month");
+    expect(html).toContain("in the available period");
   });
 
   it("claims no change from a single data point", () => {
@@ -168,7 +168,7 @@ describe("NetWorthWidget", () => {
         history: [{ month: "2026-07", netWorth: 1500 }],
       }),
     );
-    expect(html).not.toContain("in the last month");
+    expect(html).not.toContain("in the available period");
   });
 
   it("has an empty state with no history at all", () => {

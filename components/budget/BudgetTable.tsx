@@ -115,7 +115,7 @@ function RowMenu({
           aria-label={`Plan controls for ${line.label}`}
           className="absolute right-0 z-40 mt-2 w-64 space-y-3 rounded-card border border-panel-border bg-panel p-3 shadow-float"
         >
-          <label className="block text-xs font-semibold text-muted">
+          <label className="block text-xs font-medium text-muted">
             Group
             {/* Per-row accessible names, matching the Sort order input below.
                 Without them every open row menu exposes a control called just
@@ -148,7 +148,7 @@ function RowMenu({
             />
             {" "}Rollover unused budget
           </label>
-          <label className="block text-xs font-semibold text-muted">
+          <label className="block text-xs font-medium text-muted">
             <span className="block">Sort order</span>
             <input
               aria-label={`Sort order for ${line.label}`}
@@ -281,7 +281,7 @@ function BudgetRow({
             {formatCurrency(line.remaining, currency)}
           </Badge>
         ) : (
-          <span data-money className="font-semibold" style={{ color: "var(--viz-pos)" }}>
+          <span data-money className="font-medium" style={{ color: "var(--viz-pos)" }}>
             {formatCurrency(line.remaining, currency)}
           </span>
         )}
@@ -360,7 +360,7 @@ function BudgetCard({
               {formatCurrency(line.remaining, currency)}
             </Badge>
           ) : (
-            <span data-money className="mt-1 block font-semibold" style={{ color: "var(--viz-pos)" }}>
+            <span data-money className="mt-1 block font-medium" style={{ color: "var(--viz-pos)" }}>
               {formatCurrency(line.remaining, currency)}
             </span>
           )}
@@ -396,13 +396,13 @@ export default function BudgetTable({
   return (
     <section className="overflow-hidden rounded-card border border-panel-border bg-panel shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-        <h2 className="font-semibold">{section.label}</h2>
+        <h2 className="font-medium">{section.label}</h2>
         <div className="flex items-center gap-4 text-right text-xs text-muted">
           <span data-money>{formatCurrency(section.planned, currency)} planned</span>
           <span data-money>{formatCurrency(section.actual, currency)} actual</span>
           <span
             data-money
-            className="text-sm font-bold"
+            className="text-sm font-medium"
             style={{ color: section.remaining >= 0 ? "var(--viz-pos)" : "var(--viz-neg)" }}
           >
             {formatCurrency(section.remaining, currency)} remaining
@@ -467,7 +467,7 @@ export default function BudgetTable({
           <button
             type="button"
             onClick={() => setShowUnbudgeted((value) => !value)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-field px-2 -mx-2 text-sm font-semibold text-accent hover:bg-panel-hover focus-visible:outline-2"
+            className="inline-flex min-h-11 items-center gap-2 rounded-field px-2 -mx-2 text-sm font-medium text-accent hover:bg-panel-hover focus-visible:outline-2"
           >
             {showUnbudgeted ? (
               <EyeOff aria-hidden className="h-4 w-4" />

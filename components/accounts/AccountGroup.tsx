@@ -28,7 +28,7 @@ export default function AccountGroup({
     >
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 focus-visible:outline-2">
         <span>
-          <span className="block text-sm font-bold">{group.label}</span>
+          <span className="block text-sm font-medium">{group.label}</span>
           <span className="block text-xs text-muted">
             {group.rows.length} account{group.rows.length === 1 ? "" : "s"}
           </span>
@@ -40,7 +40,7 @@ export default function AccountGroup({
               <span key={`${groupKey}-${total.currency}`} className="text-right">
                 <span
                   data-money
-                  className="block rounded-full bg-panel-2 px-2.5 py-1 text-xs font-bold tabular-nums"
+                  className="block rounded-full bg-panel-2 px-2.5 py-1 text-xs font-medium tabular-nums"
                 >
                   {formatCurrency(total.amount, total.currency)}
                 </span>
@@ -48,7 +48,7 @@ export default function AccountGroup({
                   <span
                     data-money
                     className={cn(
-                      "mt-1 block text-xs font-semibold tabular-nums",
+                      "mt-1 block text-xs font-medium tabular-nums",
                       change.amount >= 0 ? "text-[var(--viz-pos)]" : "text-[var(--viz-neg)]",
                     )}
                   >

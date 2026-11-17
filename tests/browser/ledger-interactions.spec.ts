@@ -109,6 +109,7 @@ for (const width of [375, 1440]) {
     await expect.poll(listenerCount).toBe(2);
     await expect(page.getByRole("checkbox", { name: "Cleared" })).toBeChecked();
     await page.getByRole("checkbox", { name: "Cleared" }).uncheck();
+    page.once("dialog", dialog => dialog.accept());
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect.poll(listenerCount).toBe(0);
@@ -264,3 +265,39 @@ for (const width of [375, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+
+test("transaction drafts survive dismissal and failed saves, and saved notes reopen", async ({ page }) => {
+  let failSave = true;
+  const writes: unknown[] = [];
+  await page.route("http://fundflow.test/**", route => {
+    if (route.request().url().includes("/api/transactions/annotate")) {
+      writes.push(route.request().postDataJSON());
+      return route.fulfill({ status: failSave ? 503 : 200, json: failSave ? { error: "Try again later" } : { ok: true } });
+    }
+    if (route.request().url().includes("/api/")) return route.fulfill({ json: {} });
+    return route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en"><head><title>Drafts</title><style>${css}</style></head><body><div id="root"></div></body></html>` });
+  });
+  await page.goto("http://fundflow.test/");
+  await page.addScriptTag({ content: script });
+  await page.getByRole("button", { name: "Details for Coffee" }).click();
+  await page.getByLabel("Note", { exact: true }).fill("Disposable draft");
+  page.once("dialog", dialog => dialog.dismiss());
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Note", { exact: true })).toHaveValue("Disposable draft");
+  expect(writes).toHaveLength(0);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("Try again later");
+  await expect(page.getByLabel("Note", { exact: true })).toHaveValue("Disposable draft");
+  failSave = false;
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Details for Coffee" }).click();
+  await expect(page.getByLabel("Note", { exact: true })).toHaveValue("Disposable draft");
+  await page.getByLabel("Note", { exact: true }).fill("Discard this edit");
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Details for Coffee" }).click();
+  await expect(page.getByLabel("Note", { exact: true })).toHaveValue("Disposable draft");
+  expect(writes).toHaveLength(2);
+});

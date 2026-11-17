@@ -3,11 +3,11 @@
 import RuleEffectSummary from "@/components/transactions/RuleEffectSummary";
 import DetailPane from "@/components/ui/DetailPane";
 import RuleChangeProvenance from "@/components/transactions/RuleChangeProvenance";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input, { fieldClasses } from "@/components/ui/Input";
-import Modal, { type ModalProps } from "@/components/ui/Modal";
+import { type ModalProps } from "@/components/ui/Modal";
 import TransactionOverrideControl, {
   type TransactionOverride,
 } from "@/components/transactions/TransactionOverrideControl";
@@ -15,8 +15,8 @@ import { cn } from "@/lib/cn";
 import { formatCurrency, titleCase } from "@/lib/format";
 import UndoToast from "@/components/ui/UndoToast";
 
-function EditorContainer({ detailsEnabled, ...props }: Readonly<ModalProps & { detailsEnabled: boolean }>) {
-  return detailsEnabled ? <DetailPane open={props.open} onClose={props.onClose} titleId={props.titleId!}>{props.children}</DetailPane> : <Modal {...props} />;
+function EditorContainer(props: Readonly<ModalProps & { detailsEnabled: boolean }>) {
+  return <DetailPane open={props.open} onClose={props.onClose} titleId={props.titleId!}>{props.children}</DetailPane>;
 }
 
 export interface EditorSplit {
@@ -57,6 +57,16 @@ interface SplitRow {
 
 function toSplitRow(split: { category: string; amount: number }): SplitRow {
   return { id: crypto.randomUUID(), category: split.category, amount: String(split.amount) };
+}
+
+/** Compare raw drafts so even incomplete splits are protected from dismissal. */
+function hasAnnotationChanges(
+  draft: { note: string; tagText: string; cleared: boolean; rows: SplitRow[] },
+  saved: { note: string; tags: string[]; cleared: boolean; splits: EditorSplit[] },
+): boolean {
+  return draft.note !== saved.note || draft.tagText !== saved.tags.join(", ") || draft.cleared !== saved.cleared
+    || JSON.stringify(draft.rows.map(({ category, amount }) => ({ category, amount })))
+      !== JSON.stringify(saved.splits.map(({ category, amount }) => ({ category, amount: String(amount) })));
 }
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -265,18 +275,20 @@ function TransactionSplitSection({
 type AnnotationSnapshot = { note: string; tags: string[]; cleared: boolean };
 
 /** Close this editor when another row opens its details or Escape asks. */
-function useCloseOnOtherDetail(key: string, open: boolean, setOpen: (open: boolean) => void) {
+function useCloseOnOtherDetail(key: string, open: boolean, requestClose: () => boolean) {
   useEffect(() => {
     if (!open) return;
-    const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== key) setOpen(false); };
-    const closeRequested = () => setOpen(false);
+    const closeOther = (event: Event) => {
+      if ((event as CustomEvent).detail !== key && !requestClose()) event.preventDefault();
+    };
+    const closeRequested = () => { requestClose(); };
     window.addEventListener("fundflow:transaction-detail", closeOther);
     window.addEventListener("fundflow:transaction-detail-close", closeRequested);
     return () => {
       window.removeEventListener("fundflow:transaction-detail", closeOther);
       window.removeEventListener("fundflow:transaction-detail-close", closeRequested);
     };
-  }, [key, open, setOpen]);
+  }, [key, open, requestClose]);
 }
 
 async function requestAnnotationUndo(transactionId: string, state: { expected: AnnotationSnapshot; restore: AnnotationSnapshot }): Promise<void> {
@@ -424,10 +436,28 @@ export default function TransactionEditor({
   const [error, setError] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<{ restore: { note: string; tags: string[]; cleared: boolean }; expected: { note: string; tags: string[]; cleared: boolean } } | null>(null);
 
-  useCloseOnOtherDetail(`${idPrefix}${transaction.id}`, open, setOpen);
+  const dirty = hasAnnotationChanges(
+    { note, tagText, cleared, rows },
+    { ...saved, cleared: savedCleared },
+  );
+  const requestClose = useCallback(() => {
+    if (saving) return false;
+    if (dirty && !window.confirm("Discard unsaved transaction changes?")) return false;
+    setOpen(false);
+    return true;
+  }, [dirty, saving]);
+  useCloseOnOtherDetail(`${idPrefix}${transaction.id}`, open, requestClose);
+  useEffect(() => {
+    if (!open || (!dirty && !saving)) return;
+    const protectDraft = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener("beforeunload", protectDraft);
+    return () => window.removeEventListener("beforeunload", protectDraft);
+  }, [open, dirty, saving]);
 
   function openEditor() {
-    if (detailsEnabled) window.dispatchEvent(new CustomEvent("fundflow:transaction-detail", { detail: `${idPrefix}${transaction.id}` }));
+    if (!window.dispatchEvent(new CustomEvent("fundflow:transaction-detail", {
+      detail: `${idPrefix}${transaction.id}`, cancelable: true,
+    }))) return;
     setNote(saved.note);
     setTagText(saved.tags.join(", "));
     setRows(saved.splits.map(toSplitRow));
@@ -471,6 +501,7 @@ export default function TransactionEditor({
   }
 
   async function save() {
+    if (saving) return;
     setError(null);
     if (activeRows.length > 0 && !splitsBalanced) {
       setError(`Splits must total ${formatCurrency(target, transaction.currency)}.`);
@@ -516,7 +547,7 @@ export default function TransactionEditor({
         type="button"
         onClick={openEditor}
         className={cn(
-          "inline-flex min-h-11 min-w-11 items-center justify-center rounded-field px-2 py-1 text-xs font-medium transition-colors sm:min-h-0 sm:min-w-0",
+          "inline-flex min-h-11 min-w-11 items-center justify-center rounded-field px-2 py-1 text-sm font-medium transition-colors pointer-fine:min-h-9 pointer-fine:min-w-9",
           hasAnnotations
             ? "text-accent hover:bg-panel-hover"
             : "text-muted hover:bg-panel-hover hover:text-foreground",
@@ -524,23 +555,23 @@ export default function TransactionEditor({
         aria-label={detailsEnabled ? `Details for ${transaction.merchant}` : editorButtonLabel}
         data-transaction-detail-trigger
       >
-        {detailsEnabled ? "Details" : editorActionLabel}
+        <span aria-hidden>›</span><span className="sr-only">{detailsEnabled ? "Details" : editorActionLabel}</span>
       </button>
 
       <EditorContainer
         detailsEnabled={detailsEnabled}
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={requestClose}
         placement="sheet"
         titleId={`${idPrefix}title-${transaction.id}`}
         className="max-h-[90vh] max-w-lg overflow-y-auto"
       >
             <div className="mb-4">
-              <p className="text-xs uppercase tracking-wider text-muted">
+              <p className="text-sm text-muted">
                 {transaction.amount < 0 ? "Money in" : "Money out"} ·{" "}
                 <span data-money>{formatCurrency(target, transaction.currency)}</span>
               </p>
-              <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-semibold">{transaction.merchant}</h2>
+              <h2 id={`${idPrefix}title-${transaction.id}`} className="text-lg font-medium">{transaction.merchant}</h2>
             </div>
 
             <AnnotationFields
@@ -585,9 +616,8 @@ export default function TransactionEditor({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  setOpen(false);
-                }}
+                onClick={requestClose}
+                disabled={saving}
               >
                 Cancel
               </Button>

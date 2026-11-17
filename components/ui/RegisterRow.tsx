@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 function amountPrefix(amount: number): string {
   if (roundsToZero(amount)) return "";
   if (amount > 0) return "+";
-  return "-";
+  return "";
 }
 
 /**
@@ -18,7 +18,7 @@ function amountPrefix(amount: number): string {
  *
  * `amount` is already in display sign convention: positive is an inflow
  * (rendered with a leading "+", var(--viz-pos)); negative is an outflow
- * (var(--viz-neg)). Callers own converting from whatever raw sign
+ * (unsigned, neutral text). Callers own converting from whatever raw sign
  * convention their data source uses (Plaid: positive = out) before
  * passing it in.
  */
@@ -43,11 +43,10 @@ export default function RegisterRow({
   logoUrl?: string | null;
 }>) {
   const inflow = amount > 0 && !roundsToZero(amount);
-  const outflow = amount < 0 && !roundsToZero(amount);
   return (
     <li
       className={cn(
-        "flex items-center gap-3 rounded-field p-2 transition-colors duration-150 hover:bg-panel-hover active:scale-[0.99] active:opacity-90",
+        "flex items-center gap-3 rounded-field p-2 transition-colors duration-150 hover:bg-panel-hover",
         index % 2 === 1 && "bg-panel-2",
       )}
     >
@@ -58,7 +57,7 @@ export default function RegisterRow({
         className="shrink-0"
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{merchant}</span>
+        <span className="block truncate text-base font-normal">{merchant}</span>
         {meta && (
           <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted">{meta}</span>
         )}
@@ -66,9 +65,9 @@ export default function RegisterRow({
       <span className="text-right">
         <span
           data-money
-          className="block text-sm font-bold"
+          className="block text-base font-normal"
           style={
-            inflow || outflow ? { color: inflow ? "var(--viz-pos)" : "var(--viz-neg)" } : undefined
+            inflow ? { color: "var(--viz-pos)" } : undefined
           }
         >
           {amountPrefix(amount)}

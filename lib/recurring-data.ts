@@ -1,3 +1,4 @@
+import { chunkValues } from "@/lib/postgrest-limits";
 import { accountDisplayLabel } from "@/lib/account-label";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -233,8 +234,7 @@ async function loadJoinRows(
   userId: string | undefined,
 ): Promise<JoinRow[]> {
   const rows: JoinRow[] = [];
-  for (let i = 0; i < streamIds.length; i += 500) {
-    const chunk = streamIds.slice(i, i + 500);
+  for (const chunk of chunkValues(streamIds)) {
     const chunkRows = await loadPagedRows<JoinRow>(
       (from, to) => {
         let query = supabase
@@ -260,8 +260,7 @@ async function loadTransactionDates(
   userId: string | undefined,
 ): Promise<Map<string, TransactionDateRow>> {
   const dates = new Map<string, TransactionDateRow>();
-  for (let i = 0; i < transactionIds.length; i += 500) {
-    const chunk = transactionIds.slice(i, i + 500);
+  for (const chunk of chunkValues(transactionIds)) {
     let query = supabase
       .from("transactions")
       .select("id,date,amount,account_id,user_id")

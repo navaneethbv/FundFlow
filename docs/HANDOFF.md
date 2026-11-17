@@ -1,9 +1,76 @@
+## 2026-11-17 — continued browser acceptance testing
+
+See the latest section of `MONARCH_PARITY.md`: synthetic drawer failure/retry and
+focus tests passed manually; authenticated search, sort, month and calendar URL
+reload checks passed. Primary routes rendered read-only. Removed temporary fixture;
+returned local tab to Dashboard and reset viewport. No real data/settings changes.
+Playwright remains blocked by a missing browser executable. Typecheck/lint pass
+(existing plugin warning); the final isolated full unit run passed 580 files / 6,476 tests (after two
+interrupted attempts). Palette and graph update also completed.
+Mobile calendar root/body width discrepancy remains unverified. Continue same PR
+scope; no commit/PR yet, and the broader parity checklist remains incomplete.
+
+## 2026-11-17 — local authentication unblocked; recurring query fix verified
+
+User started localhost:3001 and completed Google authentication. Fixed the runtime
+`recurring_query_failed:transactions` by using the shared 150-ID PostgREST URL
+budget instead of 500-ID batches for recurring stream/transaction lookups. The
+request-length regression fails before and passes after; 36 focused tests,
+typecheck and targeted lint pass. Signed-in local Dashboard, Transactions drawer,
+and Accounts now render. See `docs/MONARCH_PARITY.md` for verification details.
+Earlier server/login blockers are resolved. Continue remaining parity work on the
+same branch; no PR/commit yet. Preserve the unrelated `.opencode` edits.
+
+## 2026-11-17 — parity continuation, local runtime still blocked
+
+Continued the same uncommitted `ui/monarch-workflow-parity` work: annotation
+unsaved-draft confirmation, pending-save close protection, synthetic retry/reopen
+coverage, recurring upcoming/overdue selection with source-identity deduplication,
+budget exploration disclosure/320px rail, and compact goal scenarios/debt link.
+Six focused unit files (74 tests) and typecheck passed. The final recurring recheck passed 11 tests, including the collision
+regression; targeted lint, graph update, and diff whitespace checks passed. See `docs/MONARCH_PARITY.md` for canonical gaps.
+A loopback-only server retry failed with `listen EPERM 127.0.0.1:3001`; the port
+is not reachable. The browser connection exists, but working-tree rendering and
+browser tests still need a running development server/test browser. No PR yet.
+Preserve both original `.opencode` edits. Do not merge or deploy.
+
 # FundFlow Session Handoff
 
 This is a dated verification and implementation log.
 PRs #225 and #226 merged on October 13, 2026; their pre-merge branch descriptions below are historical.
 Use [the deferred-work tracker](TODO.md) for current source status and remaining acceptance gates.
 A recorded deployment or local test result does not verify a later production build.
+
+## 2026-11-17: Monarch workflow parity, in progress
+
+Branch `ui/monarch-workflow-parity`, base and verified remote main
+`1417272cbc7feaea1efb732ded58330e8106380e`. PR #242 is merged; the old first-pass
+"unmerged" entry below is historical. The user requests **all gaps in the same PR**,
+and to open that PR once finished. Do not merge or deploy.
+
+[The active checklist](MONARCH_PARITY.md) owns live observations, implemented
+changes, remaining gaps, verification limits and resume prerequisites. Browser
+access works. Both signed-in apps were inspected read-only across primary pages;
+real financial data/settings were not edited. Tabs returned to dashboard and the
+FundFlow viewport override was reset.
+
+Working-tree changes: compact URL-driven dashboard filters; disclosures preserving
+secondary workflows; equal widget columns; working local net-worth/recent-entry
+selectors; honest navigation labels; quieter budget/account/recurring/ledger rows;
+unsigned neutral outflows; page-scoped transaction summary; accessible right-side
+annotation drawer. Financial APIs, flags and calculations are unchanged.
+
+The full unit suite passed 580 files / 6,474 tests. Typecheck and palette passed;
+lint had no errors (existing unrelated plugin warning). Final focused recheck passed 4 files / 45 tests, including the calendar-window
+regression. Typecheck, lint (same existing warning), and diff checks passed again.
+Development server, build font download and browser-test launch are blocked as
+listed in the checklist. New browser tests are authored but **not verified**.
+No authenticated mutation/save/reload acceptance has been performed.
+
+Preserve `.opencode/opencode.json` and `.opencode/plugins/graphify.js` unchanged;
+they were dirty before this task. Never stage graph outputs. No new PR, commit,
+push, merge, deployment, database migration or dependency change at this checkpoint.
+Continue this work rather than starting a second parity branch/PR.
 
 ## 2026-11-16: Monarch look and feel, first pass (unmerged)
 

@@ -154,7 +154,7 @@ function OccurrenceRowMenu({
         >
           {isPersistedStreamSource(occurrence.source) && stream && (
             <>
-              <label className="block text-xs font-semibold text-muted">
+              <label className="block text-xs font-medium text-muted">
                 Expected amount{" "}
                 <input
                   aria-label={`Expected amount for ${occurrence.merchant}`}
@@ -182,7 +182,7 @@ function OccurrenceRowMenu({
                       onReview(stream.id);
                       close();
                     }}
-                    className="min-h-11 flex-1 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
+                    className="min-h-11 flex-1 rounded-field bg-accent px-3 text-sm font-medium text-accent-foreground"
                   >
                     Confirm
                   </button>
@@ -193,7 +193,7 @@ function OccurrenceRowMenu({
                       onDismiss(stream.id);
                       close();
                     }}
-                    className="min-h-11 flex-1 rounded-field border border-panel-border px-3 text-sm font-semibold"
+                    className="min-h-11 flex-1 rounded-field border border-panel-border px-3 text-sm font-medium"
                   >
                     Not recurring
                   </button>
@@ -207,7 +207,7 @@ function OccurrenceRowMenu({
                     onRestore(stream.id);
                     close();
                   }}
-                  className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-semibold"
+                  className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-medium"
                 >
                   Restore
                 </button>
@@ -232,7 +232,7 @@ function OccurrenceRowMenu({
                   onDeleteManualItem(manualItem.id);
                   close();
                 }}
-                className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-semibold"
+                className="min-h-11 w-full rounded-field border border-panel-border px-3 text-sm font-medium"
               >
                 Delete
               </button>
@@ -282,7 +282,7 @@ function OccurrenceCard({
             className="shrink-0"
           />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{occurrence.merchant}</span>
+            <span className="block truncate text-sm font-medium">{occurrence.merchant}</span>
             <span className="text-xs text-muted">{occurrence.frequency}</span>
             {occurrence.source === "inferred" && (
               <span className="block text-xs text-muted">
@@ -301,7 +301,7 @@ function OccurrenceCard({
             )}
             <span
               data-money
-              className="metric-value text-sm font-semibold"
+              className="metric-value text-sm font-medium"
               style={{ color: occurrence.isIncome ? "var(--viz-pos)" : "var(--viz-neg)" }}
             >
               {occurrence.isIncome ? "+" : ""}
@@ -326,7 +326,7 @@ function OccurrenceCard({
         <span className="tabular-nums">
           Due {formatDay(occurrence.dueDate)}
           {occurrence.status === "overdue" && (
-            <span className="ml-1.5 font-semibold text-accent">
+            <span className="ml-1.5 font-medium text-accent">
               ({formatDueAnnotation(daysUntil(occurrence.dueDate, today))})
             </span>
           )}
@@ -387,7 +387,7 @@ function OccurrenceTableRow({
             className="shrink-0"
           />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{occurrence.merchant}</span>
+            <span className="block truncate text-sm font-medium">{occurrence.merchant}</span>
             <span className="text-xs text-muted">{occurrence.frequency}</span>
             {occurrence.source === "inferred" && (
               <span className="block text-xs text-muted">
@@ -400,7 +400,7 @@ function OccurrenceTableRow({
       <td className="px-4 py-3 text-sm tabular-nums whitespace-nowrap">
         {formatDay(occurrence.dueDate)}
         {occurrence.status === "overdue" && (
-          <span className="ml-1.5 text-xs font-semibold text-accent">
+          <span className="ml-1.5 text-xs font-medium text-accent">
             ({formatDueAnnotation(daysUntil(occurrence.dueDate, today))})
           </span>
         )}
@@ -521,7 +521,7 @@ function OccurrenceTable({
             onDeleteManualItem={onDeleteManualItem}
           />
         ))}
-        <div className="flex items-center justify-between rounded-field border border-panel-border bg-panel-2 p-3 font-semibold text-sm">
+        <div className="flex items-center justify-between rounded-field border border-panel-border bg-panel-2 p-3 font-medium text-sm">
           <span>{totalLabel} Total</span>
           <span data-money>{formatCurrency(total, currency)}</span>
         </div>
@@ -563,7 +563,7 @@ function OccurrenceTable({
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-panel-border bg-panel-2 font-semibold">
+            <tr className="border-t border-panel-border bg-panel-2 font-medium">
               <td className="px-4 py-3" colSpan={4}>
                 {totalLabel} Total
               </td>
@@ -604,7 +604,7 @@ function ManageRow({
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 border-t border-panel-border py-3 first:border-t-0">
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold">{stream.merchantName?.trim() || stream.description?.trim() || "Unknown"}</span>
+        <span className="block truncate text-sm font-medium">{stream.merchantName?.trim() || stream.description?.trim() || "Unknown"}</span>
         <span className="text-xs text-muted">
           {stream.accountName ?? "Unlinked account"}
           {stream.dismissedAt ? " · Not recurring" : ""}
@@ -634,7 +634,7 @@ function ManageRow({
               type="button"
               disabled={pending}
               onClick={() => onReview(stream.id)}
-              className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
+              className="min-h-11 rounded-field bg-accent px-3 text-sm font-medium text-accent-foreground"
             >
               Confirm
             </button>
@@ -644,7 +644,7 @@ function ManageRow({
               type="button"
               disabled={pending}
               onClick={() => onDismiss(stream.id)}
-              className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
+              className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-medium"
             >
               Not recurring
             </button>
@@ -654,7 +654,7 @@ function ManageRow({
               type="button"
               disabled={pending}
               onClick={() => onRestore(stream.id)}
-              className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
+              className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-medium"
             >
               Restore
             </button>
@@ -683,7 +683,7 @@ function ManualItemRow({
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 border-t border-panel-border py-3 first:border-t-0">
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold">{item.name}</span>
+        <span className="block truncate text-sm font-medium">{item.name}</span>
         <span className="text-xs text-muted">
           <span className="tabular-nums">{formatDay(item.nextDate)}</span> ·{" "}
           {manualFrequencyLabel(item.frequency)} ·{" "}
@@ -697,7 +697,7 @@ function ManualItemRow({
         </span>
       </span>
       <span className="flex items-center gap-3">
-        <label className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted">
           <input
             type="checkbox"
             checked={item.enabled}
@@ -710,7 +710,7 @@ function ManualItemRow({
           type="button"
           disabled={pending}
           onClick={() => onDelete(item.id)}
-          className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-semibold"
+          className="min-h-11 rounded-field border border-panel-border px-3 text-sm font-medium"
         >
           Delete
         </button>
@@ -817,11 +817,11 @@ function AddManualItemForm({
       <button
         type="submit"
         disabled={pending}
-        className="min-h-11 rounded-field bg-accent px-3 text-sm font-semibold text-accent-foreground"
+        className="min-h-11 rounded-field bg-accent px-3 text-sm font-medium text-accent-foreground"
       >
         Add
       </button>
-      {formError && <p className="w-full text-xs font-semibold text-danger">{formError}</p>}
+      {formError && <p className="w-full text-xs font-medium text-danger">{formError}</p>}
     </form>
   );
 }
@@ -980,7 +980,7 @@ export default function RecurringList({
           },
         ]}
       />
-      {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
+      {error && <p className="mt-3 text-sm font-medium text-danger">{error}</p>}
       <div className="pt-4">
         {tab === "overdue" && (
           <OccurrenceTable
@@ -1027,7 +1027,7 @@ export default function RecurringList({
             </ul>
             {manageStreams.inactive.length > 0 && (
               <details className="mt-4 border-t border-panel-border pt-4">
-                <summary className="min-h-11 cursor-pointer text-sm font-semibold text-muted">
+                <summary className="min-h-11 cursor-pointer text-sm font-medium text-muted">
                   Not recurring or ended ({manageStreams.inactive.length})
                 </summary>
                 <ul>
@@ -1046,7 +1046,7 @@ export default function RecurringList({
               </details>
             )}
             <div className="mt-6 border-t border-panel-border pt-4">
-              <h3 className="text-sm font-semibold">Manual items</h3>
+              <h3 className="text-sm font-medium">Manual items</h3>
               <ul>
                 {manualItems.length === 0 ? (
                   <p className="py-3 text-sm text-muted">No manual items yet.</p>

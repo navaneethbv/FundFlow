@@ -1,12 +1,10 @@
-import Link from "next/link";
+import RouteSelect from "@/components/ui/RouteSelect";
 import type { AccountSummary } from "@/lib/dashboard";
 import { accountDisplayLabel } from "@/lib/account-label";
-import { cn } from "@/lib/cn";
-import { formatMinutesAgo } from "@/lib/format";
+import { formatMonth, formatMinutesAgo } from "@/lib/format";
 import ConnectBankButton from "@/components/ConnectBankButton";
 import RefreshButton from "@/components/RefreshButton";
 import ButtonLink from "@/components/ui/ButtonLink";
-import MonthChips from "@/components/dashboard/MonthChips";
 import {
   dashboardHref,
   withExtraParams,
@@ -34,86 +32,27 @@ export default function DashboardToolbar({
   lastSyncAgoMinutes: number | null;
   extraParams?: Record<string, string | undefined>;
 }>) {
+  const href = (accountId: string | undefined, month: string) => withExtraParams(
+    dashboardHref({ view: activeView, accountId, month }), extraParams,
+  );
   return (
-    <section className="space-y-3 rounded-card border border-panel-border bg-panel p-3 sm:p-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
+    <section aria-label="Dashboard filters" className="flex flex-wrap items-center gap-2">
+      <RouteSelect label="Account filter" value={href(selectedAccountId, selectedMonth)} options={[
+        { label: "All accounts", href: href(undefined, selectedMonth) },
+        ...accounts.map(account => ({ label: accountDisplayLabel(account.name, account.mask), href: href(account.id, selectedMonth) })),
+      ]} />
+      <RouteSelect label="Month filter" value={href(selectedAccountId, selectedMonth)} options={
+        [...new Set([selectedMonth, ...months])].map(month => ({ label: formatMonth(month), href: href(selectedAccountId, month) }))
+      } />
+      <details className="min-w-0">
+        <summary className="cursor-pointer rounded-field border border-panel-border px-3 py-2 text-sm font-medium focus-visible:outline-2">Manage accounts</summary>
+        <div className="mt-2 flex w-64 max-w-full flex-wrap gap-2 rounded-card border border-panel-border bg-panel p-3 shadow-float">
           <ConnectBankButton />
           {hasBanks && <RefreshButton />}
-          <ButtonLink
-            href={`/review?month=${selectedMonth}`}
-            size="sm"
-            variant="ghost"
-          >
-            Monthly review
-          </ButtonLink>
-          {hasBanks && (
-            <span className="text-xs font-medium text-muted">
-              {itemCount} institution{itemCount === 1 ? "" : "s"}, synced{" "}
-              {formatMinutesAgo(lastSyncAgoMinutes)}
-            </span>
-          )}
+          <ButtonLink href={`/review?month=${selectedMonth}`} size="sm" variant="ghost">Monthly review</ButtonLink>
+          {hasBanks && <p className="text-xs text-muted">{itemCount} institutions, synced {formatMinutesAgo(lastSyncAgoMinutes)}</p>}
         </div>
-
-        {accounts.length > 0 && (
-          <nav
-            aria-label="Account filter"
-            className="flex min-w-0 max-w-full gap-1.5 overflow-x-auto scrollbar-none"
-          >
-            <Link
-              href={withExtraParams(
-                dashboardHref({ view: activeView, month: selectedMonth }),
-                extraParams,
-              )}
-              aria-current={selectedAccountId ? undefined : "true"}
-              className={cn(
-                "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
-                selectedAccountId
-                  ? "border-panel-border text-muted hover:text-foreground"
-                  : "border-accent bg-accent-soft text-accent",
-              )}
-            >
-              All accounts
-            </Link>
-            {accounts.map((account) => {
-              const active = selectedAccountId === account.id;
-              return (
-                <Link
-                  key={account.id}
-                  href={withExtraParams(
-                    dashboardHref({
-                      view: activeView,
-                      accountId: active ? undefined : account.id,
-                      month: selectedMonth,
-                    }),
-                    extraParams,
-                  )}
-                  aria-current={active ? "true" : undefined}
-                  className={cn(
-                    "flex min-h-11 shrink-0 items-center rounded-field border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 sm:min-h-0",
-                    active
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-panel-border text-muted hover:text-foreground",
-                  )}
-                >
-                  {/* Display only: the filter still matches on `account.id`,
-                      and provider names that already end in their own mask
-                      would otherwise print it twice. */}
-                  {accountDisplayLabel(account.name, account.mask)}
-                </Link>
-              );
-            })}
-          </nav>
-        )}
-      </div>
-
-      <MonthChips
-        months={months}
-        selectedMonth={selectedMonth}
-        selectedAccountId={selectedAccountId}
-        activeView={activeView}
-        extraParams={extraParams}
-      />
+      </details>
     </section>
   );
 }

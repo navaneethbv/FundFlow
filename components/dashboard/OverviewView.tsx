@@ -1,3 +1,4 @@
+import Disclosure from "@/components/ui/Disclosure";
 import DashboardWidgetGrid, {
   type DashboardWidgetGridData,
 } from "@/components/dashboard/DashboardWidgetGrid";
@@ -80,7 +81,7 @@ export default async function OverviewView({
   return (
     <>
       {loaded.ledgerStrip.account && (
-        <LedgerStrip
+        <Disclosure title="Account activity"><LedgerStrip
           ticks={loaded.ledgerStrip.ticks}
           accountName={loaded.ledgerStrip.account.name ?? "Account"}
           accountMask={loaded.ledgerStrip.account.mask}
@@ -90,7 +91,7 @@ export default async function OverviewView({
           accountId={loaded.ledgerStrip.account.id}
           accounts={loaded.ledgerStrip.accounts}
           buildAccountHref={buildLedgerAccountHref}
-        />
+        /></Disclosure>
       )}
       <DashboardWidgetGrid
         prefs={prefs}

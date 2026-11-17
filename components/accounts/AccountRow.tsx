@@ -30,7 +30,7 @@ export default function AccountRow({
           className="shrink-0"
         />
         <div className="min-w-0">
-          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-base font-medium">
             {isFeatureEnabled("ownerAttributionDots") && <OwnerDot ownerId={row.ownerUserId} viewerId={viewerId} />}
             <span className="truncate">{row.name}</span>
           </p>
@@ -62,7 +62,7 @@ export default function AccountRow({
         <div aria-hidden className="hidden min-h-11 sm:block" />
       )}
       <div className="text-left sm:text-right">
-        <p data-money className="metric-value text-sm">
+        <p data-money className="metric-value text-base">
           {row.balance === null
             ? "Unavailable"
             : formatCurrency(row.balance, row.currency)}
@@ -70,7 +70,7 @@ export default function AccountRow({
         <p
           className={
             row.stale
-              ? "mt-1 text-xs font-semibold text-warning"
+              ? "mt-1 text-xs font-medium text-warning"
               : "mt-1 text-xs text-muted"
           }
         >

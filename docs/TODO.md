@@ -4,6 +4,15 @@ Source status checked October 16, 2026.
 Dated deployment, migration, and verification entries below describe their recorded checkpoints; they do not verify the current production environment.
 Remaining live acceptance and feature-flag decisions stay separate from a merged implementation.
 
+## Active: Monarch workflow parity, 2026-11-17
+
+All follow-up gaps are tracked in [the parity checklist](MONARCH_PARITY.md) and
+must stay in one PR. Implementation is in progress on
+`ui/monarch-workflow-parity`, based on merged PR #242. Live comparison succeeded;
+validation of the edited application is blocked by local runtime restrictions.
+Do not mark parity complete or open a completed-work PR before the checklist and
+acceptance checks are resolved. No merge or deployment is authorized.
+
 ## Current review: repository review, 2026-11-15
 
 [The review](reviews/2026-11-15-repository-review.md) describes the original findings against `37908d5`. The follow-up on PR #239 implements the P1 and P2 code changes and the scoped P3 fixes in the handoff.

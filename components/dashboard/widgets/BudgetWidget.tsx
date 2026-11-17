@@ -1,5 +1,5 @@
 import WidgetShell from "@/components/dashboard/widgets/WidgetShell";
-import DropdownButton from "@/components/ui/DropdownButton";
+import ButtonLink from "@/components/ui/ButtonLink";
 import ProgressBar, { type ProgressBarTone } from "@/components/ui/ProgressBar";
 import { formatCurrency } from "@/lib/format";
 import type { DashboardBudgetGroup } from "@/lib/dashboard-budget-groups";
@@ -31,9 +31,9 @@ export default function BudgetWidget({
           ? "No budgets set. Add one to track planned against actual."
           : null
       }
-      action={<DropdownButton label="This month" items={[{ label: "Open Budget", href: "/budget" }]} />}
+      action={<ButtonLink href="/budget" variant="ghost" size="sm">Open Budget</ButtonLink>}
     >
-      <ul className="space-y-3">
+      <ul className="divide-y divide-panel-border">
         {groups.map((group) => {
           let pct = 0;
           if (group.monthlyLimit > 0) {
@@ -42,21 +42,24 @@ export default function BudgetWidget({
             pct = 100;
           }
           return (
-            <li key={group.key}>
-              <div className="flex justify-between gap-3 text-sm">
+            <li key={group.key} className="py-4 first:pt-0 last:pb-0">
+              <div className="flex justify-between gap-3 text-base">
                 <span className="truncate">{group.label}</span>
                 <span className="tabular-nums text-muted" data-money>
-                  {formatCurrency(group.spent, currency)} /{" "}
-                  {formatCurrency(group.monthlyLimit, currency)}
+                  {formatCurrency(group.monthlyLimit, currency)} planned
                 </span>
               </div>
               <ProgressBar
-                className="mt-1"
-                size="sm"
+                className="mt-3"
+                size="md"
                 percent={pct}
                 tone={STATUS_TONE[group.status] ?? "accent"}
                 label={`${group.label}: ${pct}% of budget used, ${group.status}`}
               />
+              <div className="mt-2 flex justify-between gap-3 text-sm">
+                <span data-money>{formatCurrency(group.spent, currency)} spent</span>
+                <span data-money className={group.spent > group.monthlyLimit ? "text-danger" : "text-success"}>{formatCurrency(group.remaining, currency)} remaining</span>
+              </div>
             </li>
           );
         })}

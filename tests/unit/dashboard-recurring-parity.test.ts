@@ -100,3 +100,15 @@ describe("Dashboard uses Recurring's persisted occurrences", () => {
   });
 
 });
+
+it("keeps distinct same-name occurrences when overdue and upcoming windows overlap", () => {
+  const html = renderToStaticMarkup(createElement(RecurringWidget, {
+    today: "2026-09-06", currency: "USD", items: [
+      { id: "stream-a", name: "Shared merchant", amount: 25, nextDate: "2026-09-06", status: "late" },
+      { id: "stream-b", name: "Shared merchant", amount: 40, nextDate: "2026-09-06", status: "expected" },
+    ],
+  }));
+  expect(html).toContain("$25.00");
+  expect(html).toContain("$40.00");
+  expect(html.match(/<li\b/g)).toHaveLength(2);
+});

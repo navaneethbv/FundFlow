@@ -175,7 +175,7 @@ describe("Frontend Multiverse Polish: Interactive Primitives & Navigation", () =
     expect(html).toContain("active:scale-[0.98]");
   });
 
-  it("RegisterRow provides hover transition, active press, and rounded-field styling", () => {
+  it("RegisterRow provides quiet hover transition and rounded-field styling", () => {
     const html = renderToStaticMarkup(
       createElement(RegisterRow, {
         index: 0,
@@ -186,7 +186,7 @@ describe("Frontend Multiverse Polish: Interactive Primitives & Navigation", () =
     );
     expect(html).toContain("rounded-field");
     expect(html).toContain("transition-colors");
-    expect(html).toContain("active:scale-[0.99]");
+    expect(html).not.toContain("active:scale-[0.99]");
   });
 
   it("EmptyState supports hover transition and accent border highlight", () => {

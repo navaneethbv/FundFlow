@@ -1,3 +1,4 @@
+import Disclosure from "@/components/ui/Disclosure";
 import AppShell from "@/components/shell/AppShell";
 import ManualAssetNotice from "@/components/accounts/ManualAssetNotice";
 import PageHeader from "@/components/shell/PageHeader";
@@ -142,9 +143,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
         title={`Good ${greeting}, ${greetingName}`}
         actions={<DashboardHeaderActions activeView={activeView} prefsRaw={profileRow?.dashboard_prefs} />}
       />
-
       <DashboardSetupPanels supabase={supabase} userId={user?.id} dashboardPrefs={profileRow?.dashboard_prefs} />
-
       <FreshnessBanner brokenBanks={brokenBanks} isStale={data.syncIsStale} />
       <ManualAssetNotice />
       {!hasBanks ? (
@@ -167,6 +166,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
             lastSyncAgoMinutes={data.lastSyncAgoMinutes}
             extraParams={extraParams}
           />
+          <Disclosure title="Views and financial status" open={activeView !== "overview"}>
           <DashboardViewTabs
             activeView={activeView}
             withOverview={widgetsEnabled}
@@ -183,7 +183,6 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
               spendPerPerson={data.spendPerPerson}
             />
           )}
-
           <PriorityRail
             brokenBankCount={brokenBanks.length}
             isStale={data.syncIsStale}
@@ -194,6 +193,7 @@ export default async function DashboardPage({ searchParams }: Readonly<PageProps
             anomalyCount={data.spendingAnomalies.length}
           />
 
+          </Disclosure>
           {activeView === "overview" && (
             <OverviewView
               prefsRaw={profileRow?.dashboard_prefs}
