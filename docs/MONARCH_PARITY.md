@@ -165,3 +165,21 @@ Final full unit rerun: **580 files / 6,476 tests passed** (149.89s), using
 supersedes the interrupted attempts above. Palette validation passes light/dark
 with the existing documented exceptions. Graph update completed (optional SQL
 parser unavailable); generated graph outputs remain excluded from source changes.
+
+### PR #243 check repairs
+
+Initial remote CI passed production build, coverage, future-clock, lint,
+typecheck and palette. Of 79 component browser cases, only the two budget
+exploration cases failed: they expected controls inside a closed disclosure.
+The test now opens the disclosure by keyboard before checking its contents.
+Codacy callback/nullable-value findings and editor complexity were repaired.
+
+The dependency audit blocks on GHSA-fc5q-39xc-vjpf, covering Picomatch through
+4.0.7. npm latest and the official advisory were checked November 17: there is
+no patched release; proposed upstream PR micromatch/picomatch#237 remains open.
+Audit enforcement is unchanged. This upstream blocker is separate from parity.
+
+Local focused workflow/widget checks passed 33 tests. Browser installation
+succeeded under /tmp but process permission errors still prevented launch.
+The local environment then disconnected; the same source repairs were prepared
+from the verified PR head through GitHub. Follow-up CI owns final verification.

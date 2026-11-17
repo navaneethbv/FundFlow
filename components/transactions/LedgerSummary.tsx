@@ -9,12 +9,13 @@ export default function LedgerSummary({ rows, total, page }: Readonly<{
 }>) {
   const dates = rows.map(row => row.date).sort((a, b) => a.localeCompare(b));
   const currencies = [...new Set(rows.map(row => row.iso_currency_code ?? "Unknown"))].sort((a, b) => a.localeCompare(b));
+  const lastDate = dates.at(-1);
   const entries = [
     ["Matching transactions", total.toLocaleString()],
     ["On this page", String(rows.length)],
     ["Pending on this page", String(rows.filter(row => row.pending).length)],
     ["First date on this page", dates[0] ? formatDate(dates[0]) : "—"],
-    ["Last date on this page", dates.at(-1) ? formatDate(dates.at(-1)!) : "—"],
+    ["Last date on this page", lastDate ? formatDate(lastDate) : "—"],
     ["Currencies on this page", currencies.join(", ") || "—"],
   ];
   return <aside aria-label="Transaction summary" className="min-w-0 xl:sticky xl:top-20">

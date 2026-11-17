@@ -19,7 +19,7 @@ export default function RouteSelect({ label, value, options }: Readonly<{
         onChange={event => {
           const href = event.currentTarget.value;
           if (!href.startsWith("/") || href.startsWith("//") || !options.some(option => option.href === href)) return;
-          startTransition(() => router.push(href, { scroll: false }));
+          startTransition(() => { router.push(href, { scroll: false }); });
         }}>
         {options.map(option => <option key={option.href} value={option.href}>{option.label}</option>)}
       </select>

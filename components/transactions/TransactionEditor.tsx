@@ -59,6 +59,16 @@ function toSplitRow(split: { category: string; amount: number }): SplitRow {
   return { id: crypto.randomUUID(), category: split.category, amount: String(split.amount) };
 }
 
+/** Compare raw drafts so even incomplete splits are protected from dismissal. */
+function hasAnnotationChanges(
+  draft: { note: string; tagText: string; cleared: boolean; rows: SplitRow[] },
+  saved: { note: string; tags: string[]; cleared: boolean; splits: EditorSplit[] },
+): boolean {
+  return draft.note !== saved.note || draft.tagText !== saved.tags.join(", ") || draft.cleared !== saved.cleared
+    || JSON.stringify(draft.rows.map(({ category, amount }) => ({ category, amount })))
+      !== JSON.stringify(saved.splits.map(({ category, amount }) => ({ category, amount: String(amount) })));
+}
+
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
 function TransactionSplitSection({
@@ -426,10 +436,10 @@ export default function TransactionEditor({
   const [error, setError] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<{ restore: { note: string; tags: string[]; cleared: boolean }; expected: { note: string; tags: string[]; cleared: boolean } } | null>(null);
 
-  // Compare raw drafts so even an incomplete split is protected from dismissal.
-  const dirty = note !== saved.note || tagText !== saved.tags.join(", ") || cleared !== savedCleared
-    || JSON.stringify(rows.map(({ category, amount }) => ({ category, amount })))
-      !== JSON.stringify(saved.splits.map(({ category, amount }) => ({ category, amount: String(amount) })));
+  const dirty = hasAnnotationChanges(
+    { note, tagText, cleared, rows },
+    { ...saved, cleared: savedCleared },
+  );
   const requestClose = useCallback(() => {
     if (saving) return false;
     if (dirty && !window.confirm("Discard unsaved transaction changes?")) return false;
