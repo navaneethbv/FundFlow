@@ -30,7 +30,7 @@ for(const width of [375,1440])test(`budget exploration and immutable preview at 
  await page.setViewportSize({width,height:1000});
  await page.route('http://fundflow.test/**',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html lang="en"><head><title>Budget</title><style>${css}</style></head><body><div id="root"></div><script>${script}</script></body></html>`}));
  await page.goto('http://fundflow.test/budget');
- const exploration=page.getByText('Explore budget · 4 categories shown',{exact:true});
+ const exploration=page.locator('summary').filter({hasText:/^Explore budget/});
  await expect(page.getByLabel('Search categories')).toBeHidden();
  await exploration.focus();
  await page.keyboard.press('Enter');
