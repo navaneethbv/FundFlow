@@ -1,0 +1,11 @@
+{
+  "$comment": "Advisories the CI audit gate tolerates. Each entry needs a reason and a reviewBy date; an expired entry fails the gate so the exception cannot outlive its review. Remove an entry as soon as a patched release is installable.",
+  "advisories": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "reason": "ReDoS via single-branch repeated extglobs. No patched release exists (range <=4.0.7, latest is 4.0.7). picomatch is reached only through dev tooling (vitest, vite, tinyglobby, eslint-config-next); `npm audit --omit=dev` is clean, so nothing deployed loads it, and the globs it parses are authored in this repo.",
+      "reviewBy": "2027-01-31"
+    }
+  ]
+}
