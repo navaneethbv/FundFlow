@@ -18,15 +18,15 @@
     "test:ui": "playwright test --config playwright.ui.config.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.8.0",
+    "@anthropic-ai/sdk": "^1.11.0",
     "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.119.0",
+    "@supabase/supabase-js": "^2.119.2",
     "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.73.0",
+    "lucide-react": "^1.77.0",
     "next": "^16.4.6",
-    "nodemailer": "^10.6.0",
-    "pdfkit": "^0.20.2",
+    "nodemailer": "^10.6.1",
+    "pdfkit": "^0.21.0",
     "plaid": "^51.0.0",
     "re2js": "^2.10.0",
     "react": "19.3.1",
@@ -35,7 +35,7 @@
     "server-only": "^0.0.1",
     "sharp": "0.35.5",
     "simple-icons": "^16.38.0",
-    "tailwind-merge": "^3.7.0",
+    "tailwind-merge": "^3.7.1",
     "web-push": "^4.0.0"
   },
   "devDependencies": {
@@ -48,7 +48,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
-    "@vitest/coverage-v8": "^5.1.0",
+    "@vitest/coverage-v8": "^5.1.1",
     "dotenv": "^18.0.10",
     "eslint": "^9",
     "eslint-config-next": "^16.4.6",
